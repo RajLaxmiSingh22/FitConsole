@@ -1,0 +1,231 @@
+/* =========================================================
+   FitConsole — "Fight Night" theme
+   Import once in Frontend/src/main.jsx:  import "./theme.css";
+   ========================================================= */
+
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap");
+
+:root {
+  /* ---------- Colors: surfaces ---------- */
+  --fc-bg:              #0F1012; /* Ring Black – page background */
+  --fc-bg-nav:          #131417; /* sidebar / top bar */
+  --fc-surface:         #181A1E; /* Canvas – cards */
+  --fc-surface-2:       #1E2025; /* nested tiles, empty heatmap cells */
+  --fc-surface-3:       #24272C; /* progress-bar track */
+  --fc-input-bg:        #0F1012;
+
+  /* ---------- Colors: borders ---------- */
+  --fc-border:          #2A2D33; /* Rope – card borders */
+  --fc-border-strong:   #3A3E45; /* inputs, outline buttons */
+  --fc-divider:         #23262B; /* table rows */
+
+  /* ---------- Colors: text ---------- */
+  --fc-text:            #F2F2F0; /* Chalk – headings, main text */
+  --fc-text-2:          #D6D7D9; /* body paragraphs */
+  --fc-text-3:          #C4C6CA; /* secondary, nav items */
+  --fc-text-muted:      #9CA0A8; /* labels, captions */
+
+  /* ---------- Colors: primary (Fight Red) ---------- */
+  --fc-primary:         #E5383B; /* buttons, active states, charts */
+  --fc-primary-hover:   #C92F32;
+  --fc-primary-text:    #FF6B6E; /* links and red text on dark bg */
+  --fc-primary-text-hover: #FF9497;
+  --fc-primary-soft:    rgba(229, 56, 59, 0.16); /* active nav, badge bg */
+  --fc-on-primary:      #FFFFFF; /* text on red buttons */
+
+  /* ---------- Colors: status ---------- */
+  --fc-success:         #3DDC97; /* paid, active, approve */
+  --fc-success-soft:    rgba(61, 220, 151, 0.14);
+  --fc-on-success:      #0F1012;
+
+  --fc-warning:         #F5B841; /* expiring soon */
+  --fc-warning-soft:    rgba(245, 184, 65, 0.14);
+
+  --fc-danger:          #FF5FA2; /* overdue dues, errors */
+  --fc-danger-text:     #FF7AB6;
+  --fc-danger-soft:     rgba(255, 95, 162, 0.14);
+
+  /* ---------- Chart / heatmap scale (low → high) ---------- */
+  --fc-heat-0: #1E2025;
+  --fc-heat-1: rgba(229, 56, 59, 0.25);
+  --fc-heat-2: rgba(229, 56, 59, 0.50);
+  --fc-heat-3: rgba(229, 56, 59, 0.75);
+  --fc-heat-4: #E5383B;
+
+  /* ---------- Font families ---------- */
+  --fc-font-display: "Barlow Condensed", "Arial Narrow", sans-serif; /* headings, big numbers */
+  --fc-font-body:    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* ---------- Font weights ---------- */
+  --fc-weight-regular:  400;
+  --fc-weight-medium:   500;
+  --fc-weight-semibold: 600;
+  --fc-weight-bold:     700;
+  --fc-weight-black:    800;
+
+  /* ---------- Font sizes ---------- */
+  --fc-text-xs:    12px;  /* labels, overlines (uppercase) */
+  --fc-text-sm:    13px;  /* captions, table meta, chips */
+  --fc-text-md:    14px;  /* nav, buttons, table cells */
+  --fc-text-base:  15px;  /* body, inputs */
+  --fc-text-lg:    18px;  /* card titles (Inter) */
+  --fc-text-xl:    24px;  /* section headings (display) */
+  --fc-text-2xl:   28px;  /* sub-page headings (display) */
+  --fc-text-3xl:   40px;  /* page titles, small stat numbers (display) */
+  --fc-text-4xl:   48px;  /* KPI numbers (display) */
+  --fc-text-hero:  76px;  /* login hero (display) */
+
+  /* ---------- Line heights & letter spacing ---------- */
+  --fc-leading-tight: 1;
+  --fc-leading-snug:  1.3;
+  --fc-leading-body:  1.55;
+  --fc-tracking-label:   1px;   /* uppercase labels */
+  --fc-tracking-heading: 0.5px; /* uppercase display headings */
+
+  /* ---------- Spacing (8px grid) ---------- */
+  --fc-space-1: 4px;
+  --fc-space-2: 8px;
+  --fc-space-3: 12px;
+  --fc-space-4: 16px;
+  --fc-space-5: 20px;
+  --fc-space-6: 24px;
+  --fc-space-8: 32px;
+  --fc-space-12: 48px;
+
+  /* ---------- Radius ---------- */
+  --fc-radius-sm:   8px;   /* small buttons */
+  --fc-radius-md:   10px;  /* inputs, buttons, nav items */
+  --fc-radius-lg:   12px;  /* stat tiles */
+  --fc-radius-xl:   16px;  /* cards */
+  --fc-radius-pill: 999px; /* badges, filter chips */
+
+  /* ---------- Sizes ---------- */
+  --fc-control-height: 44px; /* minimum touch target */
+  --fc-sidebar-width:  260px;
+  --fc-icon-size:      18px;
+}
+
+/* =========================================================
+   Base styles
+   ========================================================= */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fc-bg);
+  color: var(--fc-text);
+  font-family: var(--fc-font-body);
+  font-size: var(--fc-text-base);
+  line-height: var(--fc-leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--fc-primary-text); }
+a:hover { color: var(--fc-primary-text-hover); }
+
+/* =========================================================
+   Type helpers
+   ========================================================= */
+.fc-display,
+.fc-h1, .fc-h2, .fc-h3 {
+  font-family: var(--fc-font-display);
+  text-transform: uppercase;
+  letter-spacing: var(--fc-tracking-heading);
+  line-height: var(--fc-leading-snug);
+  margin: 0;
+}
+.fc-h1 { font-size: var(--fc-text-3xl); font-weight: var(--fc-weight-black); }
+.fc-h2 { font-size: var(--fc-text-2xl); font-weight: var(--fc-weight-bold); }
+.fc-h3 { font-size: var(--fc-text-xl);  font-weight: var(--fc-weight-bold); }
+
+.fc-stat {
+  font-family: var(--fc-font-display);
+  font-size: var(--fc-text-4xl);
+  font-weight: var(--fc-weight-black);
+  line-height: var(--fc-leading-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.fc-label {
+  font-size: var(--fc-text-xs);
+  font-weight: var(--fc-weight-semibold);
+  letter-spacing: var(--fc-tracking-label);
+  text-transform: uppercase;
+  color: var(--fc-text-muted);
+}
+
+.fc-num { font-variant-numeric: tabular-nums; } /* money and counts */
+
+/* =========================================================
+   Components
+   ========================================================= */
+.fc-card {
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius-xl);
+  padding: var(--fc-space-6);
+}
+
+.fc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fc-space-2);
+  height: var(--fc-control-height);
+  padding: 0 var(--fc-space-5);
+  border-radius: var(--fc-radius-md);
+  border: 1px solid transparent;
+  font-family: var(--fc-font-body);
+  font-size: var(--fc-text-md);
+  font-weight: var(--fc-weight-semibold);
+  cursor: pointer;
+  text-decoration: none;
+}
+.fc-btn--primary { background: var(--fc-primary); color: var(--fc-on-primary); font-weight: var(--fc-weight-bold); }
+.fc-btn--primary:hover { background: var(--fc-primary-hover); }
+.fc-btn--outline { background: transparent; color: var(--fc-text); border-color: var(--fc-border-strong); }
+.fc-btn--outline:hover { border-color: var(--fc-text-muted); }
+.fc-btn--ghost { background: transparent; color: var(--fc-primary-text); }
+.fc-btn--success { background: var(--fc-success); color: var(--fc-on-success); font-weight: var(--fc-weight-bold); }
+.fc-btn:focus-visible { outline: 2px solid var(--fc-primary-text); outline-offset: 2px; }
+
+.fc-input {
+  height: var(--fc-control-height);
+  width: 100%;
+  padding: 0 var(--fc-space-3);
+  border-radius: var(--fc-radius-md);
+  border: 1px solid var(--fc-border-strong);
+  background: var(--fc-input-bg);
+  color: var(--fc-text);
+  font-family: var(--fc-font-body);
+  font-size: var(--fc-text-base);
+}
+.fc-input:focus { outline: none; border-color: var(--fc-primary); }
+
+.fc-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--fc-radius-pill);
+  font-size: var(--fc-text-xs);
+  font-weight: var(--fc-weight-semibold);
+}
+.fc-badge--success { background: var(--fc-success-soft); color: var(--fc-success); }
+.fc-badge--warning { background: var(--fc-warning-soft); color: var(--fc-warning); }
+.fc-badge--danger  { background: var(--fc-danger-soft);  color: var(--fc-danger-text); }
+.fc-badge--primary { background: var(--fc-primary-soft); color: var(--fc-primary-text); }
+
+.fc-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--fc-space-3);
+  min-height: var(--fc-control-height);
+  padding: 0 var(--fc-space-3);
+  border-radius: var(--fc-radius-md);
+  color: var(--fc-text-3);
+  font-size: var(--fc-text-md);
+  font-weight: var(--fc-weight-medium);
+  text-decoration: none;
+}
+.fc-nav-item:hover { background: var(--fc-surface); color: var(--fc-text); }
+.fc-nav-item.is-active { background: var(--fc-primary-soft); color: var(--fc-primary-text); font-weight: var(--fc-weight-semibold); }
