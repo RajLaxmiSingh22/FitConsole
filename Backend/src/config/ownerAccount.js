@@ -29,8 +29,6 @@ export function getOwnerCredentials(environment = process.env) {
 
 export async function ensureOwnerAccount(environment = process.env) {
   const credentials = getOwnerCredentials(environment);
-  const passwordHash = await argon2.hash(credentials.password);
-
   await sequelize.transaction(async (transaction) => {
     let owner = await User.findOne({
       where: { email: credentials.email },
@@ -41,30 +39,19 @@ export async function ensureOwnerAccount(environment = process.env) {
       throw new Error("OWNER_EMAIL belongs to a non-owner account. Configure a unique owner email.");
     }
 
-    if (owner) {
-      await owner.update({
-        fullName: credentials.name,
-        passwordHash,
-      }, { transaction });
-    } else {
+    if (!owner) {
       owner = await User.create({
         fullName: credentials.name,
         email: credentials.email,
-        passwordHash,
+        passwordHash: await argon2.hash(credentials.password),
         role: "owner",
       }, { transaction });
     }
 
-    const existingOwners = await User.findAll({
-      where: { role: "owner" },
-      attributes: ["id"],
+    await UserStatus.findOrCreate({
+      where: { userId: owner.id },
+      defaults: { userId: owner.id, active: true },
       transaction,
     });
-    for (const existingOwner of existingOwners) {
-      await UserStatus.upsert({
-        userId: existingOwner.id,
-        active: existingOwner.id === owner.id,
-      }, { transaction });
-    }
   });
 }

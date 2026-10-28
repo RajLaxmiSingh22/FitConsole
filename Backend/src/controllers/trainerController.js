@@ -1,11 +1,11 @@
 import { Client, Course, Trainer, TrainerDetails, User, UserStatus } from "../models/index.js";
 
 const publicTrainerFields = {
-  attributes: ["id", "userId", "certification", "phone"],
+  attributes: ["id", "userId", "certification"],
   include: [
     { model: User, attributes: ["id", "fullName"] },
     { model: Course, attributes: ["id", "name", "category"], through: { attributes: [] } },
-    TrainerDetails,
+    { model: TrainerDetails, attributes: ["userId", "experienceYears"] },
   ],
 };
 
@@ -41,22 +41,29 @@ export async function listTrainers(_req, res) {
 
 export async function getTrainer(req, res) {
   try {
+    const isPrivateView = req.user?.role === "owner" ||
+      (req.user?.role === "trainer" && req.user.id === req.params.id);
     const [trainer, status] = await Promise.all([
       Trainer.findOne({
       ...publicTrainerFields,
       where: { userId: req.params.id },
       include: [
-        { model: User, attributes: ["id", "fullName"] },
+        { model: User, attributes: ["id", "fullName", ...(isPrivateView ? ["email"] : [])] },
         publicTrainerFields.include[1],
         publicTrainerFields.include[2],
       ],
+      attributes: ["id", "userId", "certification", ...(isPrivateView ? ["phone"] : [])],
       }),
       UserStatus.findByPk(req.params.id),
     ]);
     if (!trainer || status?.active === false) return res.status(404).json({ status: "error", message: "Trainer not found." });
+    const data = {
+      ...trainer.toJSON(),
+      experienceYears: trainer.TrainerDetail?.experienceYears ?? null,
+    };
     return res.json({
       status: "success",
-      data: { ...trainer.toJSON(), experienceYears: trainer.TrainerDetail?.experienceYears ?? null },
+      data,
     });
   } catch (error) {
     console.error("Trainer lookup failed:", error);

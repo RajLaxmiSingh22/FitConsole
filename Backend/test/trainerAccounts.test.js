@@ -14,10 +14,14 @@ const validEnvironment = {
   TRAINER_3_PASSWORD: "trainer-three-password",
 };
 
-test("trainer credentials require three complete accounts", () => {
+test("trainer bootstrap accounts are optional", () => {
+  assert.deepEqual(getTrainerCredentials({}), []);
+});
+
+test("configured trainer credentials must be complete", () => {
   assert.throws(
-    () => getTrainerCredentials({}),
-    /Configure three trainers/,
+    () => getTrainerCredentials({ TRAINER_1_EMAIL: "one@example.com" }),
+    /Configure each optional trainer bootstrap account/,
   );
 });
 

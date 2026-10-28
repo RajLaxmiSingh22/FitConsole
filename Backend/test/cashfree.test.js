@@ -8,6 +8,7 @@ import {
 } from "../src/services/cashfree.js";
 import { createCashfreeOrderSchema } from "../src/validation/payment.validation.js";
 import { createClientMembershipSchema } from "../src/validation/membership.validation.js";
+import { recordCashfreeSuccess } from "../src/services/cashfreePayment.js";
 
 test("Cashfree order status prioritizes success over pending attempts", () => {
   assert.equal(getCashfreePaymentStatus([
@@ -17,7 +18,152 @@ test("Cashfree order status prioritizes success over pending attempts", () => {
   ]), "success");
   assert.equal(getCashfreePaymentStatus([{ payment_status: "PENDING" }]), "pending");
   assert.equal(getCashfreePaymentStatus([{ payment_status: "FAILED" }]), "failed");
-  assert.equal(getCashfreePaymentStatus([]), "failed");
+  assert.equal(getCashfreePaymentStatus([{ payment_status: "USER_DROPPED" }]), "failed");
+  assert.equal(getCashfreePaymentStatus([{ payment_status: "CANCELLED" }]), "failed");
+  assert.equal(getCashfreePaymentStatus([{ payment_status: "FAILED" }, { payment_status: "UNKNOWN" }]), "pending");
+  assert.equal(getCashfreePaymentStatus([]), "pending");
+});
+
+test("Cashfree success recording is idempotent for a repeated webhook or return", async () => {
+  const state = {
+    order: {
+      id: "order-row-id",
+      cashfreeOrderId: "fitconsole_order",
+      membershipId: "membership-id",
+      clientId: "client-id",
+      amount: "25.00",
+      reminderDate: null,
+      paymentId: null,
+      status: "pending",
+    },
+    payments: [],
+    details: [],
+    audits: [],
+  };
+  const dependencies = {
+    sequelize: {
+      transaction: (callback) => callback({ LOCK: { UPDATE: "UPDATE" } }),
+    },
+    CashfreeOrder: {
+      findByPk: async () => ({
+        ...state.order,
+        update: async (fields) => Object.assign(state.order, fields),
+      }),
+    },
+    Membership: {
+      findByPk: async () => ({ id: "membership-id", totalAmount: "20.00" }),
+    },
+    Payment: {
+      sum: async () => state.payments.reduce((sum, payment) => sum + Number(payment.amount), 0),
+      findByPk: async (id) => state.payments.find((payment) => payment.id === id),
+      create: async (values) => {
+        const payment = {
+          id: `payment-${state.payments.length + 1}`,
+          ...values,
+          toJSON() {
+            const { toJSON, ...serialized } = this;
+            return serialized;
+          },
+        };
+        state.payments.push(payment);
+        return payment;
+      },
+    },
+    PaymentDetails: {
+      create: async (values) => state.details.push(values),
+    },
+    PaymentAudit: {
+      create: async (values) => state.audits.push(values),
+    },
+  };
+  const order = { id: state.order.id, cashfreeOrderId: state.order.cashfreeOrderId, amount: state.order.amount };
+  const providerPayment = {
+    order_id: state.order.cashfreeOrderId,
+    payment_status: "SUCCESS",
+    payment_amount: 25,
+    payment_currency: "INR",
+    payment_group: "upi",
+  };
+
+  const originalWarn = console.warn;
+  let warningCount = 0;
+  console.warn = () => { warningCount += 1; };
+  let first;
+  let second;
+  try {
+    first = await recordCashfreeSuccess(order, providerPayment, dependencies);
+    second = await recordCashfreeSuccess(order, providerPayment, dependencies);
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(first.id, second.id);
+  assert.equal(first.needsReview, true);
+  assert.equal(warningCount, 1);
+  assert.equal(state.payments.length, 1);
+  assert.equal(state.details.length, 1);
+  assert.equal(state.audits.length, 1);
+  assert.equal(state.order.status, "success");
+  assert.equal(state.order.paymentId, first.id);
+});
+
+test("Cashfree payment activates a pending membership when the full balance is collected", async () => {
+  const membership = {
+    id: "membership-id",
+    status: "pending_payment",
+    totalAmount: "100.00",
+    update: async (values) => Object.assign(membership, values),
+  };
+  const orderState = {
+    id: "order-row-id",
+    cashfreeOrderId: "fitconsole_order",
+    membershipId: membership.id,
+    clientId: "client-id",
+    createdById: "owner-id",
+    amount: "40.00",
+    reminderDate: null,
+    status: "pending",
+    update: async (values) => Object.assign(orderState, values),
+  };
+  let createdPayment;
+  const dependencies = {
+    sequelize: {
+      transaction: (callback) => callback({ LOCK: { UPDATE: "UPDATE" } }),
+    },
+    CashfreeOrder: { findByPk: async () => orderState },
+    Membership: { findByPk: async () => membership },
+    Payment: {
+      sum: async () => 60,
+      create: async (values) => {
+        createdPayment = {
+          id: "payment-id",
+          ...values,
+          toJSON() {
+            const { toJSON, ...serialized } = this;
+            return serialized;
+          },
+        };
+        return createdPayment;
+      },
+    },
+    PaymentDetails: { create: async () => null },
+    PaymentAudit: { create: async () => null },
+  };
+  await recordCashfreeSuccess(
+    { id: orderState.id, cashfreeOrderId: orderState.cashfreeOrderId, amount: orderState.amount },
+    {
+      order_id: orderState.cashfreeOrderId,
+      payment_status: "SUCCESS",
+      payment_amount: 40,
+      payment_currency: "INR",
+      payment_group: "upi",
+    },
+    dependencies,
+  );
+
+  assert.equal(membership.status, "active");
+  assert.equal(orderState.status, "success");
+  assert.equal(createdPayment.needsReview, false);
 });
 
 test("Cashfree payment groups map only to supported payment methods", () => {

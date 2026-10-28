@@ -14,6 +14,7 @@ import {
   createMembershipSchema,
   listMembershipsQuerySchema,
   membershipIdParamsSchema,
+  renewMembershipSchema,
 } from "../validation/index.js";
 
 const membershipRoutes = Router();
@@ -21,7 +22,12 @@ membershipRoutes.use(requireAuthentication);
 membershipRoutes.post("/checkout", requireRole("client"), validateRequest({ body: createClientMembershipSchema }), createClientMembership);
 membershipRoutes.post("/", requireRole("owner"), validateRequest({ body: createMembershipSchema }), createMembership);
 membershipRoutes.get("/", requireRole("owner"), validateRequest({ query: listMembershipsQuerySchema }), listMemberships);
-membershipRoutes.patch("/:id/renew", requireRole("owner"), validateRequest({ params: membershipIdParamsSchema }), renewMembership);
+membershipRoutes.patch(
+  "/:id/renew",
+  requireRole("owner"),
+  validateRequest({ params: membershipIdParamsSchema, body: renewMembershipSchema }),
+  renewMembership,
+);
 membershipRoutes.patch("/:id/cancel", requireRole("owner"), validateRequest({ params: membershipIdParamsSchema }), cancelMembership);
 
 export default membershipRoutes;

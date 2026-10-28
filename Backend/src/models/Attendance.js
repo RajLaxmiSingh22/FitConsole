@@ -7,6 +7,9 @@ const Attendance = sequelize.define("Attendance", {
   courseId: { type: DataTypes.UUID, allowNull: false },
   trainerId: DataTypes.UUID,
   attendedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  attendedOn: { type: DataTypes.DATEONLY, allowNull: false, field: "attended_on" },
+  override: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  overrideReason: DataTypes.TEXT,
 }, { tableName: "attendance" });
 
 export default Attendance;
