@@ -1,4 +1,6 @@
 import Joi from "joi";
+import { paginationKeys } from "../utils/pagination.js";
+import { ALLERGY_TAGS, DIET_PREFERENCES, GOAL_CATEGORIES } from "../utils/dietProfile.js";
 import { idParamsSchema, idSchema, stripUnknownFields } from "./common.validation.js";
 
 const profileFields = {
@@ -13,12 +15,15 @@ const profileFields = {
   bloodGroup: Joi.string().valid("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-").allow(null),
   address: Joi.string().allow("", null),
   gender: Joi.string().max(40).allow("", null),
+  goalCategory: Joi.string().valid(...GOAL_CATEGORIES).allow(null),
+  dietPreference: Joi.string().valid(...DIET_PREFERENCES).allow(null),
+  allergies: Joi.array().items(Joi.string().valid(...ALLERGY_TAGS)).unique().max(ALLERGY_TAGS.length),
 };
 
 export const createClientSchema = stripUnknownFields(Joi.object({
   fullName: Joi.string().trim().max(255).required(),
   email: Joi.string().trim().email().lowercase().required(),
-  password: Joi.string().min(8).max(128).required(),
+  password: Joi.string().min(12).max(128).required(),
   ...profileFields,
 }));
 
@@ -29,3 +34,11 @@ export const idProofSchema = Joi.object({
   reference: Joi.string().trim().max(2048).required(),
 });
 export const optionalClientIdParamsSchema = Joi.object({ id: idSchema });
+
+export const clientListQuerySchema = Joi.object({ ...paginationKeys });
+
+export const progressEntrySchema = stripUnknownFields(Joi.object({
+  weightKg: Joi.number().positive().max(400).allow(null),
+  stamina: Joi.number().integer().min(1).max(10).allow(null),
+  note: Joi.string().trim().max(500).allow("", null),
+}).or("weightKg", "stamina", "note"));

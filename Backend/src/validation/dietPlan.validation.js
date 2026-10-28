@@ -11,3 +11,4 @@ export const updateDietPlanSchema = Joi.object({
 
 export const dietPlanClientParamsSchema = idParamsSchema;
 export const dietPlanIdParamsSchema = planIdParamsSchema;
+export const dietPlanTweakParamsSchema = Joi.object({ id: idSchema.required(), planId: idSchema.required() });

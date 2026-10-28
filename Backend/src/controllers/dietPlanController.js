@@ -1,37 +1,42 @@
-import { Client, Course, DietPlan, DietPlanReview } from "../models/index.js";
+import { Op } from "sequelize";
+import { Client, Course, DietPlan, DietPlanReview, ProgressEntry } from "../models/index.js";
+import { computeDietTargets, IncompleteProfileError } from "../services/dietTargets.js";
+import {
+  buildDietPrompt,
+  buildTweakPrompt,
+  GeminiConfigError,
+  generateValidatedPlan,
+} from "../services/gemini.js";
 import { canAccessClient } from "../utils/access.js";
+import { todayInGymTz } from "../utils/dates.js";
 
-async function generateGeminiPlan(client, course) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured.");
+function generationErrorResponse(res, error) {
+  if (error instanceof IncompleteProfileError) {
+    return res.status(409).json({ status: "error", message: `${error.message} Update the client profile first.` });
   }
-  const model = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Create a general wellness diet plan as valid JSON for review by a qualified trainer. Do not make medical claims. Client goal: ${client.goal ?? "not provided"}. Course: ${course?.name ?? "general fitness"}. Include meals and hydration guidance.`,
-          }],
-        }],
-        generationConfig: { responseMimeType: "application/json" },
-      }),
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Gemini request failed with status ${response.status}.`);
+  if (error instanceof GeminiConfigError) {
+    console.error("Diet plan generation is not configured:", error.message);
+    return res.status(503).json({ status: "error", message: "Diet generation is not configured." });
   }
-  const result = await response.json();
-  const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Gemini returned no diet plan.");
-  return JSON.parse(text);
+  console.error("Diet plan generation failed:", error.message);
+  return res.status(502).json({ status: "error", message: "Unable to generate a valid diet plan. Please try again." });
+}
+
+async function requireTrainerCourse(user, course) {
+  const assignedTrainers = await course.getTrainers({ where: { userId: user.id }, attributes: ["userId"] });
+  return assignedTrainers.length > 0;
+}
+
+function targetsFor(client, course) {
+  return computeDietTargets({
+    dateOfBirth: client.dateOfBirth,
+    gender: client.gender,
+    heightCm: client.heightCm,
+    weightKg: client.weightKg,
+    goalCategory: client.goalCategory,
+    course,
+    today: todayInGymTz(),
+  });
 }
 
 export async function generateDietPlan(req, res) {
@@ -45,38 +50,109 @@ export async function generateDietPlan(req, res) {
     if (value.courseId && (!course || !course.active)) {
       return res.status(404).json({ status: "error", message: "Course not found." });
     }
-    if (course) {
-      const assignedTrainers = await course.getTrainers({
-        where: { userId: req.user.id },
-        attributes: ["userId"],
-      });
-      if (!assignedTrainers.length) {
-        return res.status(403).json({ status: "error", message: "This course is not assigned to you." });
-      }
+    if (course && !(await requireTrainerCourse(req.user, course))) {
+      return res.status(403).json({ status: "error", message: "This course is not assigned to you." });
     }
     let plan;
+    let targets;
     try {
-      plan = await generateGeminiPlan(client, course);
+      targets = targetsFor(client, course);
+      // The free-text goal is passed only as a delimited, length-limited note.
+      plan = await generateValidatedPlan(buildDietPrompt({ profile: client, targets, note: client.goal }), targets.dailyCalories);
     } catch (error) {
-      console.error("Diet plan generation failed:", error);
-      return res.status(error.message === "GEMINI_API_KEY is not configured." ? 503 : 502).json({
-        status: "error",
-        message: error.message === "GEMINI_API_KEY is not configured."
-          ? "Diet generation is not configured."
-          : "Unable to generate a diet plan.",
-      });
+      return generationErrorResponse(res, error);
     }
     const dietPlan = await DietPlan.create({
       clientId: client.userId,
       trainerId: req.user.id,
       courseId: course?.id ?? null,
-      plan,
+      plan: { ...plan, targets },
       status: "draft",
     });
     return res.status(201).json({ status: "success", data: dietPlan });
   } catch (error) {
     console.error("Diet plan creation failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to create diet plan." });
+  }
+}
+
+export async function suggestDietPlanTweak(req, res) {
+  try {
+    if (!(await canAccessClient(req.user, req.params.id))) {
+      return res.status(404).json({ status: "error", message: "Client not found." });
+    }
+    const client = await Client.findByPk(req.params.id);
+    const currentPlan = await DietPlan.findOne({
+      where: { id: req.params.planId, clientId: client.userId, trainerId: req.user.id },
+      include: [Course],
+    });
+    if (!currentPlan) return res.status(404).json({ status: "error", message: "Diet plan not found." });
+    const progress = await ProgressEntry.findAll({
+      where: { clientId: client.id, recordedAt: { [Op.gte]: new Date(Date.now() - 28 * 86400000) } },
+      order: [["recordedAt", "ASC"]],
+    });
+    if (!progress.length) {
+      return res.status(409).json({ status: "error", message: "Log at least one progress entry in the last four weeks first." });
+    }
+    let plan;
+    let targets;
+    try {
+      targets = targetsFor(client, currentPlan.Course);
+      const { targets: _previousTargets, ...planBody } = currentPlan.plan ?? {};
+      plan = await generateValidatedPlan(
+        buildTweakPrompt({ profile: client, targets, currentPlan: planBody, progress }),
+        targets.dailyCalories,
+      );
+    } catch (error) {
+      return generationErrorResponse(res, error);
+    }
+    const draft = await DietPlan.create({
+      clientId: client.userId,
+      trainerId: req.user.id,
+      courseId: currentPlan.courseId,
+      plan: { ...plan, targets, basedOnPlanId: currentPlan.id },
+      status: "draft",
+    });
+    return res.status(201).json({ status: "success", data: draft });
+  } catch (error) {
+    console.error("Diet plan tweak failed:", error);
+    return res.status(500).json({ status: "error", message: "Unable to suggest a diet plan tweak." });
+  }
+}
+
+export async function createProgressEntry(req, res) {
+  try {
+    if (!(await canAccessClient(req.user, req.params.id))) {
+      return res.status(404).json({ status: "error", message: "Client not found." });
+    }
+    const value = req.validated.body;
+    const entry = await ProgressEntry.create({
+      clientId: req.params.id,
+      weightKg: value.weightKg ?? null,
+      stamina: value.stamina ?? null,
+      staminaNotes: value.note || null,
+    });
+    return res.status(201).json({ status: "success", data: entry });
+  } catch (error) {
+    console.error("Progress entry creation failed:", error);
+    return res.status(500).json({ status: "error", message: "Unable to save progress." });
+  }
+}
+
+export async function listProgressEntries(req, res) {
+  try {
+    if (!(await canAccessClient(req.user, req.params.id))) {
+      return res.status(404).json({ status: "error", message: "Client not found." });
+    }
+    const entries = await ProgressEntry.findAll({
+      where: { clientId: req.params.id },
+      order: [["recordedAt", "DESC"]],
+      limit: 52,
+    });
+    return res.json({ status: "success", data: entries });
+  } catch (error) {
+    console.error("Progress list failed:", error);
+    return res.status(500).json({ status: "error", message: "Unable to retrieve progress." });
   }
 }
 
@@ -98,13 +174,19 @@ export async function listClientDietPlans(req, res) {
   }
 }
 
+// Diet plans store the client's user id; the plan's author must still be the client's current trainer.
+async function canAccessPlanClient(user, plan) {
+  const client = await Client.findOne({ where: { userId: plan.clientId }, attributes: ["id"] });
+  return Boolean(client && await canAccessClient(user, client.id));
+}
+
 export async function updateDietPlan(req, res) {
   try {
     const value = req.validated.body;
     const plan = await DietPlan.findOne({
       where: { id: req.params.planId, trainerId: req.user.id, status: "draft" },
     });
-    if (!plan) return res.status(404).json({ status: "error", message: "Draft diet plan not found." });
+    if (!plan || !(await canAccessPlanClient(req.user, plan))) return res.status(404).json({ status: "error", message: "Draft diet plan not found." });
     await plan.update({ plan: value.plan });
     return res.json({ status: "success", data: plan });
   } catch (error) {
@@ -118,7 +200,9 @@ export async function approveDietPlan(req, res) {
     const plan = await DietPlan.findOne({
       where: { id: req.params.planId, trainerId: req.user.id, status: "draft" },
     });
-    if (!plan) return res.status(404).json({ status: "error", message: "Draft diet plan not found." });
+    if (!plan || !(await canAccessPlanClient(req.user, plan))) {
+      return res.status(404).json({ status: "error", message: "Draft diet plan not found." });
+    }
     await plan.update({ status: "approved", reviewedAt: new Date() });
     await DietPlanReview.upsert({ dietPlanId: plan.id, reviewedBy: req.user.id });
     return res.json({ status: "success", data: plan });
