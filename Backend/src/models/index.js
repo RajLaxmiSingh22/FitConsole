@@ -1,4 +1,5 @@
 import Attendance from "./Attendance.js";
+import AnalyticsEvent from "./AnalyticsEvent.js";
 import CashfreeOrder from "./CashfreeOrder.js";
 import Client from "./Client.js";
 import Course from "./Course.js";
@@ -11,14 +12,20 @@ import DietTracker from "./DietTracker.js";
 import DietTrackerAuthor from "./DietTrackerAuthor.js";
 import Member from "./Member.js";
 import Membership from "./Membership.js";
+import LeadActivity from "./LeadActivity.js";
 import Message from "./Message.js";
 import Payment from "./Payment.js";
+import PaymentAudit from "./PaymentAudit.js";
+import PasswordResetToken from "./PasswordResetToken.js";
+import RefreshToken from "./RefreshToken.js";
+import ReminderLog from "./ReminderLog.js";
 import PaymentDetails from "./PaymentDetails.js";
 import ProgressEntry from "./ProgressEntry.js";
 import Trainer from "./Trainer.js";
 import TrainerDetails from "./TrainerDetails.js";
 import User from "./User.js";
 import UserStatus from "./UserStatus.js";
+import WebsiteLead from "./WebsiteLead.js";
 import WaiverAcceptance from "./WaiverAcceptance.js";
 import WaiverAudit from "./WaiverAudit.js";
 
@@ -44,6 +51,8 @@ Membership.hasMany(Payment, { foreignKey: "membershipId" });
 Payment.belongsTo(Membership, { foreignKey: "membershipId" });
 Payment.hasOne(PaymentDetails, { foreignKey: "paymentId", onDelete: "CASCADE" });
 PaymentDetails.belongsTo(Payment, { foreignKey: "paymentId" });
+Payment.hasMany(PaymentAudit, { foreignKey: "paymentId", onDelete: "CASCADE" });
+PaymentAudit.belongsTo(Payment, { foreignKey: "paymentId" });
 Client.hasMany(PaymentDetails, { foreignKey: "clientId" });
 PaymentDetails.belongsTo(Client, { foreignKey: "clientId" });
 Member.hasMany(Attendance, { foreignKey: { name: "clientId", allowNull: false }, sourceKey: "userId" });
@@ -88,9 +97,24 @@ User.hasOne(UserStatus, { foreignKey: "userId", onDelete: "CASCADE" });
 UserStatus.belongsTo(User, { foreignKey: "userId" });
 User.hasMany(Message, { foreignKey: "senderId" });
 Message.belongsTo(User, { foreignKey: "senderId" });
+User.hasMany(PasswordResetToken, { foreignKey: "userId", onDelete: "CASCADE" });
+PasswordResetToken.belongsTo(User, { foreignKey: "userId" });
+User.hasMany(RefreshToken, { foreignKey: "userId", onDelete: "CASCADE" });
+RefreshToken.belongsTo(User, { foreignKey: "userId" });
+Course.hasMany(WebsiteLead, { foreignKey: "courseId" });
+WebsiteLead.belongsTo(Course, { foreignKey: "courseId" });
+Client.hasMany(WebsiteLead, { foreignKey: "clientId" });
+WebsiteLead.belongsTo(Client, { foreignKey: "clientId" });
+WebsiteLead.hasMany(LeadActivity, { foreignKey: "leadId", onDelete: "CASCADE" });
+LeadActivity.belongsTo(WebsiteLead, { foreignKey: "leadId" });
+User.hasMany(LeadActivity, { foreignKey: "userId" });
+LeadActivity.belongsTo(User, { foreignKey: "userId" });
+WebsiteLead.hasMany(AnalyticsEvent, { foreignKey: "leadId" });
+AnalyticsEvent.belongsTo(WebsiteLead, { foreignKey: "leadId" });
 
 export {
   Attendance,
+  AnalyticsEvent,
   CashfreeOrder,
   Client,
   Course,
@@ -103,14 +127,20 @@ export {
   DietTrackerAuthor,
   Member,
   Membership,
+  LeadActivity,
   Message,
   Payment,
+  PaymentAudit,
+  PasswordResetToken,
+  RefreshToken,
+  ReminderLog,
   PaymentDetails,
   ProgressEntry,
   Trainer,
   TrainerDetails,
   User,
   UserStatus,
+  WebsiteLead,
   WaiverAcceptance,
   WaiverAudit,
 };

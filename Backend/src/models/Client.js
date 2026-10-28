@@ -29,6 +29,9 @@ const Client = sequelize.define("Client", {
   address: DataTypes.TEXT,
   idProofReference: DataTypes.TEXT,
   gender: DataTypes.STRING,
+  goalCategory: DataTypes.STRING(16),
+  dietPreference: DataTypes.STRING(16),
+  allergies: { type: DataTypes.ARRAY(DataTypes.STRING(32)), allowNull: false, defaultValue: [] },
   joinedAt: { type: DataTypes.DATEONLY, allowNull: false, defaultValue: DataTypes.NOW },
 }, { tableName: "clients" });
 

@@ -6,6 +6,7 @@ const CashfreeOrder = sequelize.define("CashfreeOrder", {
   cashfreeOrderId: { type: DataTypes.STRING(50), allowNull: false, unique: true },
   clientId: { type: DataTypes.UUID, allowNull: false },
   membershipId: DataTypes.UUID,
+  paymentSessionId: DataTypes.TEXT,
   createdById: { type: DataTypes.UUID, allowNull: false },
   amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
   reminderDate: DataTypes.DATEONLY,
