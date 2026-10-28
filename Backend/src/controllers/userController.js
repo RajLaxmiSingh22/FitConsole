@@ -1,5 +1,6 @@
 import argon2 from "argon2";
 import { sequelize } from "../database.js";
+import { revokeUserSessions } from "../auth.js";
 import { Trainer, TrainerDetails, User, UserStatus } from "../models/index.js";
 
 export async function createTrainer(req, res) {
@@ -73,7 +74,13 @@ export async function updateUserStatus(req, res) {
     if (user.role === "owner" && user.email !== process.env.OWNER_EMAIL?.trim().toLowerCase() && value.active) {
       return res.status(403).json({ status: "error", message: "Only the configured owner account can have owner access." });
     }
-    await UserStatus.upsert({ userId: user.id, active: value.active });
+    await sequelize.transaction(async (transaction) => {
+      await UserStatus.upsert({ userId: user.id, active: value.active }, { transaction });
+      if (!value.active) {
+        await user.increment("tokenVersion", { transaction });
+        await revokeUserSessions(user.id, transaction);
+      }
+    });
     return res.json({
       status: "success",
       data: { id: user.id, fullName: user.fullName, email: user.email, role: user.role, active: value.active },
