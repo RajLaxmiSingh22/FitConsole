@@ -11,3 +11,4 @@ export * from "./dietTracker.validation.js";
 export * from "./dietPlan.validation.js";
 export * from "./messaging.validation.js";
 export * from "./waiver.validation.js";
+export * from "./lead.validation.js";
