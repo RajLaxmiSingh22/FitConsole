@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { apiCalls, getApiError, setAuthToken } from "./api.js";
+import { apiCalls, getApiError, hasSessionHint, setSession } from "./api.js";
 import { Button, Field, LoadingState, Notice, initials, responseData } from "./components/ui.jsx";
 import DocumentationSite from "./DocumentationSite.jsx";
+import PublicSite from "./PublicSite.jsx";
 import ClientWorkspace from "./workspaces/ClientWorkspace.jsx";
 import OwnerWorkspace from "./workspaces/OwnerWorkspace.jsx";
 import TrainerWorkspace from "./workspaces/TrainerWorkspace.jsx";
+import OwnerWebsiteWorkspace from "./workspaces/OwnerWebsiteWorkspace.jsx";
 
 const navigation = {
   owner: [
@@ -16,6 +18,8 @@ const navigation = {
     ["Payments", "₹"],
     ["Attendance", "✓"],
     ["Reports", "↗"],
+    ["Website Leads", "✉"],
+    ["Website Analytics", "◷"],
   ],
   trainer: [
     ["Dashboard", "⌂"],
@@ -37,8 +41,8 @@ const navigation = {
 
 const roleTitles = { owner: "GYM OWNER", trainer: "COACH", client: "MEMBER" };
 
-function AuthScreen({ onAuthenticated, apiStatus, ownerLoginOnly = false }) {
-  const [mode, setMode] = useState("login");
+function AuthScreen({ onAuthenticated, apiStatus, ownerLoginOnly = false, initialMode = "login", notice = "" }) {
+  const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({ fullName: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,7 +56,8 @@ function AuthScreen({ onAuthenticated, apiStatus, ownerLoginOnly = false }) {
         ? await apiCalls.auth.login({ email: form.email, password: form.password })
         : await apiCalls.auth.register(form);
       const data = responseData(response);
-      setAuthToken(data.token);
+      setSession(data);
+      window.dispatchEvent(new CustomEvent("fitconsole:authenticated"));
       onAuthenticated(data.user);
     } catch (requestError) {
       setError(getApiError(requestError, mode === "login" ? "Unable to sign in." : "Unable to create your account."));
@@ -72,14 +77,16 @@ function AuthScreen({ onAuthenticated, apiStatus, ownerLoginOnly = false }) {
       </div>
       <div className="auth-card panel">
         <div className="auth-card-heading"><p className="overline">{ownerLoginOnly ? "OWNER ACCESS" : mode === "login" ? "WELCOME BACK" : "YOUR FIRST ROUND"}</p><h2>{mode === "login" ? "Sign in." : "Create account."}</h2><p>{ownerLoginOnly ? "Sign in with an owner account to open the documentation." : mode === "login" ? "Step back into your FitConsole." : "Member accounts are open. Staff accounts are created by your gym."}</p></div>
+        {notice && <Notice error={notice} />}
         <Notice error={error} />
         <form onSubmit={submit} className="auth-form">
           {mode === "register" && <Field label="Full name"><input autoComplete="name" required maxLength="255" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></Field>}
           <Field label="Email address"><input type="email" autoComplete="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
-          <Field label="Password"><input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={mode === "register" ? 8 : 1} required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
+          <Field label="Password"><input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={mode === "register" ? 12 : 1} required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
           <Button type="submit" className="button--wide" disabled={busy || apiStatus === "unavailable"}>{busy ? "Please wait…" : mode === "login" ? "Sign in ↗" : "Create member account ↗"}</Button>
         </form>
-        {!ownerLoginOnly && <p className="auth-switch">{mode === "login" ? "New to the gym?" : "Already have an account?"} <button onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}> {mode === "login" ? "Create a member account" : "Sign in"}</button></p>}
+        {!ownerLoginOnly && <p className="auth-switch">{mode === "login" ? <>New to the gym? <button onClick={() => { window.history.pushState(null, "", "/register"); setMode("register"); setError(""); }}>Create a member account</button></> : <>Already have an account? <button onClick={() => { window.history.pushState(null, "", "/login"); setMode("login"); setError(""); }}>Sign in</button></>}</p>}
+        {mode === "login" && <a className="auth-forgot-link" href="/forgot-password">Forgot your password?</a>}
         <p className="auth-staff-note">Owners and trainers are provisioned by the gym administrator.</p>
       </div>
     </section>
@@ -89,7 +96,11 @@ function AuthScreen({ onAuthenticated, apiStatus, ownerLoginOnly = false }) {
 
 function AppWorkspace({ user, onLogout, apiStatus, accessNotice = "" }) {
   const links = navigation[user.role] ?? navigation.client;
-  const [section, setSection] = useState(links[0][0]);
+  // Reminder links open a specific section, e.g. /?section=Membership; unknown values fall back to the first.
+  const [section, setSection] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get("section");
+    return links.some(([label]) => label === requested) ? requested : links[0][0];
+  });
   const [selectedClient, setSelectedClient] = useState(null);
   const [paymentNotice, setPaymentNotice] = useState(null);
   const handledPaymentOrders = useRef(new Set());
@@ -126,7 +137,9 @@ function AppWorkspace({ user, onLogout, apiStatus, accessNotice = "" }) {
   }, [user.id, user.role]);
 
   let workspace;
-  if (user.role === "owner") workspace = <OwnerWorkspace section={section} />;
+  if (user.role === "owner") workspace = section === "Website Leads" || section === "Website Analytics"
+    ? <OwnerWebsiteWorkspace section={section} />
+    : <OwnerWorkspace section={section} />;
   else   if (user.role === "trainer") workspace = <TrainerWorkspace
     section={section}
     user={user}
@@ -158,11 +171,32 @@ function AppWorkspace({ user, onLogout, apiStatus, accessNotice = "" }) {
 }
 
 function FitConsoleApp() {
-  const docsRequested = window.location.pathname === "/docs" || window.location.pathname.startsWith("/docs/");
+  const [path, setPath] = useState(window.location.pathname);
+  const docsRequested = path === "/docs" || path.startsWith("/docs/");
+  const publicPaths = ["/", "/about", "/trainers", "/programs", "/schedule", "/gallery", "/memberships", "/pricing", "/contact", "/trial", "/faq", "/privacy", "/terms", "/waiver", "/waiver-info", "/forgot-password", "/reset-password"];
+  useEffect(() => {
+    const handlePopState = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [apiStatus, setApiStatus] = useState("checking");
   const [accessNotice, setAccessNotice] = useState("");
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setAccessNotice("Your session expired. Please sign in again.");
+    };
+    const handleAuthenticated = () => setAccessNotice("");
+    window.addEventListener("fitconsole:session-expired", handleSessionExpired);
+    window.addEventListener("fitconsole:authenticated", handleAuthenticated);
+    return () => {
+      window.removeEventListener("fitconsole:session-expired", handleSessionExpired);
+      window.removeEventListener("fitconsole:authenticated", handleAuthenticated);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -183,14 +217,15 @@ function FitConsoleApp() {
 
   useEffect(() => {
     let mounted = true;
-    if (!localStorage.getItem("fitconsole.authToken")) {
+    if (!hasSessionHint()) {
       setAuthChecked(true);
       return () => { mounted = false; };
     }
-    apiCalls.auth.me().then((response) => {
-      if (mounted) setUser(responseData(response).user);
+    // A page load loses the in-memory CSRF token, so restore by rotating the refresh cookie.
+    apiCalls.auth.refresh().then((session) => {
+      if (mounted) setUser(session.user);
     }).catch(() => {
-      setAuthToken(null);
+      setSession(null);
     }).finally(() => {
       if (mounted) setAuthChecked(true);
     });
@@ -198,12 +233,16 @@ function FitConsoleApp() {
   }, []);
 
   function logout() {
-    setAuthToken(null);
+    apiCalls.auth.logout().catch(() => {
+      // Cookies expire on their own; local state is cleared regardless.
+    });
+    setSession(null);
     setUser(null);
   }
+  if ((publicPaths.includes(path) || path.startsWith("/reset-password/")) && !docsRequested && !(path === "/" && user)) return <PublicSite path={path === "/pricing" ? "/memberships" : path === "/waiver-info" ? "/waiver" : path} />;
   if (!authChecked) return <div className="app-loading"><span className="brand-mark">F</span><LoadingState label="Restoring your session…" /></div>;
   if (docsRequested && user?.role === "owner") return <DocumentationSite />;
-  if (!user) return <AuthScreen apiStatus={apiStatus} onAuthenticated={setUser} ownerLoginOnly={docsRequested} />;
+  if (!user) return <AuthScreen apiStatus={apiStatus} onAuthenticated={setUser} ownerLoginOnly={docsRequested} initialMode={path === "/register" ? "register" : "login"} notice={accessNotice} />;
   return <AppWorkspace user={user} onLogout={logout} apiStatus={apiStatus} accessNotice={accessNotice} />;
 }
 

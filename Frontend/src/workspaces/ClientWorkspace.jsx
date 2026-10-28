@@ -15,9 +15,55 @@ import {
   dateLabel,
   responseData,
 } from "../components/ui.jsx";
+import DietPlanView from "../components/DietPlanView.jsx";
 import MessageWorkspace from "./MessageWorkspace.jsx";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const goalOptions = [["fat_loss", "Fat loss"], ["muscle_gain", "Muscle gain"], ["maintain", "Maintain"]];
+const dietOptions = [["veg", "Vegetarian"], ["eggetarian", "Eggetarian"], ["non_veg", "Non-vegetarian"], ["vegan", "Vegan"]];
+const allergyOptions = [["peanut", "Peanut"], ["tree_nut", "Tree nuts"], ["dairy", "Dairy"], ["lactose", "Lactose"], ["gluten", "Gluten"], ["egg", "Egg"], ["soy", "Soy"], ["fish", "Fish"], ["shellfish", "Shellfish"], ["sesame", "Sesame"]];
+
+function WeeklyProgress({ clientId }) {
+  const [entries, setEntries] = useState([]);
+  const [form, setForm] = useState({ weightKg: "", stamina: "", note: "" });
+  const [state, setState] = useState({ loading: true, saving: false, error: "", message: "" });
+  async function load() {
+    try {
+      setEntries(responseData(await apiCalls.clients.progress(clientId)) ?? []);
+      setState((current) => ({ ...current, loading: false }));
+    } catch (error) {
+      setState((current) => ({ ...current, loading: false, error: getApiError(error, "Unable to load weekly progress.") }));
+    }
+  }
+  useEffect(() => { if (clientId) load(); }, [clientId]);
+  async function submit(event) {
+    event.preventDefault();
+    setState((current) => ({ ...current, saving: true, error: "", message: "" }));
+    try {
+      await apiCalls.clients.logProgress(clientId, {
+        weightKg: form.weightKg ? Number(form.weightKg) : null,
+        stamina: form.stamina ? Number(form.stamina) : null,
+        note: form.note || null,
+      });
+      setForm({ weightKg: "", stamina: "", note: "" });
+      setState((current) => ({ ...current, saving: false, message: "Weekly progress saved." }));
+      await load();
+    } catch (error) {
+      setState((current) => ({ ...current, saving: false, error: getApiError(error, "Unable to save weekly progress.") }));
+    }
+  }
+  return <Card title="Weekly progress" eyebrow="Helps your coach adjust your plan">
+    <Notice error={state.error} />
+    <Notice tone="success" error={state.message} />
+    <form className="form-grid" onSubmit={submit}>
+      <Field label="Weight (kg)"><input type="number" min="20" max="400" step="0.1" value={form.weightKg} onChange={(event) => setForm({ ...form, weightKg: event.target.value })} /></Field>
+      <Field label="Stamina (1–10)"><input type="number" min="1" max="10" step="1" value={form.stamina} onChange={(event) => setForm({ ...form, stamina: event.target.value })} /></Field>
+      <Field label="Note"><input maxLength="500" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} /></Field>
+      <div className="form-actions"><Button type="submit" disabled={state.saving || !(form.weightKg || form.stamina || form.note)}>{state.saving ? "Saving…" : "Save weekly progress"}</Button></div>
+    </form>
+    {state.loading ? <LoadingState label="Loading progress…" /> : entries.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Weight</th><th>Stamina</th><th>Note</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id}><td>{dateLabel(entry.recordedAt)}</td><td>{entry.weightKg ? `${entry.weightKg} kg` : "—"}</td><td>{entry.stamina ? `${entry.stamina}/10` : "—"}</td><td>{entry.staminaNotes || "—"}</td></tr>)}</tbody></table></div> : <EmptyState title="No weekly progress yet" detail="Log your weight and stamina once a week." />}
+  </Card>;
+}
 
 function Home({ user, plans, entries, memberships, attendance, summary, onNavigate }) {
   const activeMembership = memberships.find((membership) => membership.status === "active");
@@ -58,7 +104,7 @@ function MealPlan({ plans }) {
     <PageHeader eyebrow="Fuel for the work" title="Your meal plan" description="A trainer-reviewed plan to support your training. Talk to your coach before making major changes." />
     {plan ? <div className="meal-plan-card panel">
       <div className="meal-plan-heading"><div><p className="overline">APPROVED · {dateLabel(plan.reviewedAt ?? plan.updatedAt)}</p><h2>{plan.plan?.title ?? "Your personalized plan"}</h2></div><StatusPill tone="success">Coach approved</StatusPill></div>
-      {typeof plan.plan === "string" ? <p className="plan-copy">{plan.plan}</p> : <div className="meal-plan-content">{Object.entries(plan.plan ?? {}).map(([key, value]) => <section key={key}><h3>{key.replaceAll(/([A-Z])/g, " $1").replaceAll("_", " ")}</h3>{Array.isArray(value) ? <ul>{value.map((item, index) => <li key={index}>{typeof item === "string" ? item : JSON.stringify(item)}</li>)}</ul> : <p>{typeof value === "object" && value !== null ? JSON.stringify(value, null, 2) : String(value)}</p>}</section>)}</div>}
+      {typeof plan.plan === "string" ? <p className="plan-copy">{plan.plan}</p> : <DietPlanView plan={plan.plan} />}
       <p className="plan-disclaimer">General wellness guidance only. For medical or dietary conditions, consult a qualified healthcare professional.</p>
     </div> : <EmptyState title="No approved plan yet" detail="Your trainer will share a meal plan here after reviewing it." />}
   </>;
@@ -173,8 +219,8 @@ function Membership({ courses, memberships, payments, waiver, waivers, onWaiverA
     }
   }
   const unpaidCourses = new Set(memberships.filter((membership) => {
-    if (membership.status !== "active") return false;
-    const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    if (!["active", "pending_payment"].includes(membership.status)) return false;
+    const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
     return paid < Number(membership.totalAmount);
   }).map((membership) => membership.courseId));
   return <>
@@ -193,8 +239,8 @@ function Membership({ courses, memberships, payments, waiver, waivers, onWaiverA
             return <div className="client-offer-row" key={plan.id}>
               <span><b>{plan.durationMonths} {Number(plan.durationMonths) === 1 ? "month" : "months"}</b><small>Membership offer</small></span>
               <strong>{currency(plan.price)}</strong>
-              <Button type="button" variant="outline" disabled={Boolean(checkoutOfferId) || Boolean(checkoutMembershipId) || unpaid} onClick={() => checkoutOffer(course, plan)}>
-                {busy ? "Starting…" : unpaid ? "Pay current balance below" : "Choose & pay"}
+              <Button type="button" variant="outline" disabled={!alreadyAccepted || Boolean(checkoutOfferId) || Boolean(checkoutMembershipId) || unpaid} onClick={() => checkoutOffer(course, plan)}>
+                {busy ? "Starting…" : !alreadyAccepted ? "Accept waiver to continue" : unpaid ? "Pay current balance below" : "Choose & pay"}
               </Button>
             </div>;
           })}</div> : <p className="muted">No membership offers are available for this course yet.</p>}
@@ -204,13 +250,13 @@ function Membership({ courses, memberships, payments, waiver, waivers, onWaiverA
     <div className="dashboard-grid">
       <Card title="Memberships" eyebrow="Your plans">
         {memberships.length ? <div className="membership-list">{memberships.map((membership) => {
-          const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+          const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
           const due = Math.max(0, Number((Number(membership.totalAmount) - paid).toFixed(2)));
           return <article className="membership-row" key={membership.id}>
             <div><b>{membership.Course?.name ?? "Gym membership"}</b><small>{dateLabel(membership.startDate)} — {dateLabel(membership.endDate)}</small></div>
-            <StatusPill tone={membership.status === "active" ? "success" : membership.status === "expired" ? "warning" : "neutral"}>{membership.status}</StatusPill>
+            <StatusPill tone={membership.status === "active" ? "success" : membership.status === "pending_payment" || membership.status === "expired" ? "warning" : "neutral"}>{membership.status.replaceAll("_", " ")}</StatusPill>
             <strong>{currency(membership.totalAmount)}</strong>
-            {membership.status === "active" && due > 0 && <Button type="button" variant="outline" disabled={Boolean(checkoutMembershipId)} onClick={() => checkout(membership.id)}>{checkoutMembershipId === membership.id ? "Opening…" : `Pay ${currency(due)}`}</Button>}
+            {["active", "pending_payment"].includes(membership.status) && due > 0 && <Button type="button" variant="outline" disabled={!alreadyAccepted || Boolean(checkoutMembershipId)} onClick={() => checkout(membership.id)}>{checkoutMembershipId === membership.id ? "Opening…" : !alreadyAccepted ? "Accept waiver to pay" : `Pay ${currency(due)}`}</Button>}
           </article>;
         })}</div> : <EmptyState title="No membership found" detail="The gym team can help you choose a course and membership plan." />}
       </Card>
@@ -220,13 +266,25 @@ function Membership({ courses, memberships, payments, waiver, waivers, onWaiverA
       </Card>
     </div>
     <Card title="Payment history" eyebrow="Recorded by the gym">
-      {payments.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td>{dateLabel(payment.dateTime)}</td><td>{payment.paymentMethod ?? "—"}</td><td>{currency(payment.amount)}</td><td><StatusPill tone="success">recorded</StatusPill></td></tr>)}</tbody></table></div> : <EmptyState title="No payments recorded yet" detail="Payments recorded by the gym will appear here." />}
+      {payments.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td>{dateLabel(payment.dateTime)}</td><td>{payment.paymentMethod ?? "—"}</td><td>{currency(payment.amount)}</td><td><StatusPill tone={payment.voidedAt ? "warning" : "success"}>{payment.voidedAt ? "voided" : "recorded"}</StatusPill></td></tr>)}</tbody></table></div> : <EmptyState title="No payments recorded yet" detail="Payments recorded by the gym will appear here." />}
     </Card>
   </>;
 }
 
 function ClientProfile({ user, client, onSaved }) {
-  const [form, setForm] = useState({ phone: client.phone ?? "", emergencyContactPhone: client.emergencyContactPhone ?? "", goal: client.goal ?? "", address: client.address ?? "" });
+  const [form, setForm] = useState({
+    phone: client.phone ?? "",
+    emergencyContactPhone: client.emergencyContactPhone ?? "",
+    goal: client.goal ?? "",
+    address: client.address ?? "",
+    dateOfBirth: client.dateOfBirth ?? "",
+    gender: client.gender ?? "",
+    heightCm: client.heightCm ?? "",
+    weightKg: client.weightKg ?? "",
+    goalCategory: client.goalCategory ?? "",
+    dietPreference: client.dietPreference ?? "",
+    allergies: client.allergies ?? [],
+  });
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -236,7 +294,14 @@ function ClientProfile({ user, client, onSaved }) {
     setError("");
     setMessage("");
     try {
-      await apiCalls.clients.updateMe(form);
+      await apiCalls.clients.updateMe({
+        ...form,
+        dateOfBirth: form.dateOfBirth || null,
+        heightCm: form.heightCm ? Number(form.heightCm) : null,
+        weightKg: form.weightKg ? Number(form.weightKg) : null,
+        goalCategory: form.goalCategory || null,
+        dietPreference: form.dietPreference || null,
+      });
       setMessage("Profile updated.");
       onSaved();
     } catch (requestError) {
@@ -255,6 +320,14 @@ function ClientProfile({ user, client, onSaved }) {
       <Field label="Emergency contact"><input value={form.emergencyContactPhone} onChange={(event) => setForm({ ...form, emergencyContactPhone: event.target.value })} /></Field>
       <Field label="Training goal"><input value={form.goal} onChange={(event) => setForm({ ...form, goal: event.target.value })} /></Field>
       <Field label="Address"><input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} /></Field>
+      <Field label="Date of birth"><input type="date" value={form.dateOfBirth} onChange={(event) => setForm({ ...form, dateOfBirth: event.target.value })} /></Field>
+      <Field label="Gender"><select value={form.gender} onChange={(event) => setForm({ ...form, gender: event.target.value })}><option value="">Prefer not to say</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option></select></Field>
+      <Field label="Height (cm)"><input type="number" min="50" max="260" step="0.1" value={form.heightCm} onChange={(event) => setForm({ ...form, heightCm: event.target.value })} /></Field>
+      <Field label="Weight (kg)"><input type="number" min="20" max="400" step="0.1" value={form.weightKg} onChange={(event) => setForm({ ...form, weightKg: event.target.value })} /></Field>
+      <Field label="Goal type"><select value={form.goalCategory} onChange={(event) => setForm({ ...form, goalCategory: event.target.value })}><option value="">Choose a goal</option>{goalOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+      <Field label="Diet type"><select value={form.dietPreference} onChange={(event) => setForm({ ...form, dietPreference: event.target.value })}><option value="">Choose a diet type</option>{dietOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
+      <fieldset className="checkbox-group"><legend>Allergies</legend>{allergyOptions.map(([value, label]) => <label className="checkbox-field" key={value}><input type="checkbox" checked={form.allergies.includes(value)} onChange={(event) => setForm({ ...form, allergies: event.target.checked ? [...form.allergies, value] : form.allergies.filter((item) => item !== value) })} /><span>{label}</span></label>)}</fieldset>
+      <p className="muted">Date of birth, height, weight and goal type are used to calculate meal-plan targets. Only these numbers and categories are sent to the AI planner — never your name or contact details.</p>
       <div className="form-actions"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button></div>
     </form></Card>
   </>;
@@ -327,7 +400,7 @@ export default function ClientWorkspace({ section, user }) {
     <Notice error={data.error} />
     {section === "Home" && <Home user={user} plans={approvedPlans} entries={data.entries} memberships={data.memberships} attendance={data.attendance} summary={data.summary} onNavigate={(next) => window.dispatchEvent(new CustomEvent("fitconsole:navigate", { detail: next }))} />}
     {section === "Meal plan" && <MealPlan plans={approvedPlans} />}
-    {section === "Check-in" && <DailyCheckIn entries={data.entries} clientId={clientId} onSaved={load} />}
+    {section === "Check-in" && <><DailyCheckIn entries={data.entries} clientId={clientId} onSaved={load} /><WeeklyProgress clientId={clientId} /></>}
     {section === "Membership" && <Membership courses={data.courses} memberships={data.memberships} payments={data.payments} waiver={data.waiver} waivers={data.waivers} onWaiverAccepted={load} onRefresh={load} />}
     {section === "Messages" && <MessageWorkspace currentUserId={user.id} contacts={contacts} />}
     {section === "Profile" && <ClientProfile user={user} client={data.client} onSaved={load} />}

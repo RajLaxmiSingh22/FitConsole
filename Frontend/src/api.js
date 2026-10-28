@@ -1,6 +1,12 @@
 import axios from "axios";
 
-export const AUTH_TOKEN_KEY = "fitconsole.authToken";
+// Session tokens live in httpOnly cookies. This flag only records that a session may exist,
+// so anonymous visitors are not sent through a refresh request on every load.
+const SESSION_HINT_KEY = "fitconsole.session";
+const LEGACY_TOKEN_KEY = "fitconsole.authToken";
+const SAFE_METHODS = new Set(["get", "head", "options"]);
+let csrfToken = "";
+let refreshInFlight = null;
 
 const apiBaseUrl = (
   import.meta.env.VITE_API_URL || "http://localhost:9000/api"
@@ -10,17 +16,80 @@ export const api = axios.create({
   baseURL: apiBaseUrl,
   headers: { "Content-Type": "application/json" },
   timeout: 15000,
+  withCredentials: true,
 });
 
+function readSessionHint() {
+  try {
+    return localStorage.getItem(SESSION_HINT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function hasSessionHint() {
+  return readSessionHint();
+}
+
+// Stores the CSRF token returned by login/register/refresh, or clears local session state when given null.
+export function setSession(session) {
+  csrfToken = session?.csrfToken ?? "";
+  try {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    if (session) localStorage.setItem(SESSION_HINT_KEY, "1");
+    else localStorage.removeItem(SESSION_HINT_KEY);
+  } catch {
+    // Storage can be unavailable; the cookie session still works for this page load.
+  }
+}
+
+export function refreshSession() {
+  refreshInFlight ??= api.post("/auth/refresh", null, { skipAuthRefresh: true })
+    .then((response) => {
+      const data = response.data?.data;
+      setSession(data);
+      return data;
+    })
+    .finally(() => { refreshInFlight = null; });
+  return refreshInFlight;
+}
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (csrfToken && !SAFE_METHODS.has((config.method ?? "get").toLowerCase())) {
+    config.headers["X-CSRF-Token"] = csrfToken;
+  }
   return config;
 });
 
-export function setAuthToken(token) {
-  if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
-  else localStorage.removeItem(AUTH_TOKEN_KEY);
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error.config;
+    if (error.response?.status === 401 && config && !config.skipAuthRefresh && !config._retried && readSessionHint()) {
+      config._retried = true;
+      try {
+        await refreshSession();
+        return api(config);
+      } catch {
+        setSession(null);
+        window.dispatchEvent(new CustomEvent("fitconsole:session-expired"));
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+// Blob downloads return JSON errors as a Blob; read the message out so it can be shown.
+export async function getBlobApiError(error, fallback) {
+  const data = error.response?.data;
+  if (data instanceof Blob) {
+    try {
+      return JSON.parse(await data.text()).message || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return getApiError(error, fallback);
 }
 
 export function getApiError(error, fallback = "Something went wrong. Please try again.") {
@@ -30,10 +99,29 @@ export function getApiError(error, fallback = "Something went wrong. Please try 
 export const apiCalls = {
   health: () => api.get("/health"),
   auth: {
-    login: (credentials) => api.post("/auth/login", credentials),
-    register: (account) => api.post("/auth/register", account),
+    login: (credentials) => api.post("/auth/login", credentials, { skipAuthRefresh: true }),
+    register: (account) => api.post("/auth/register", account, { skipAuthRefresh: true }),
+    refresh: refreshSession,
+    logout: () => api.post("/auth/logout", null, { skipAuthRefresh: true }),
     me: () => api.get("/auth/me"),
     changePassword: (passwords) => api.patch("/auth/password", passwords),
+    requestPasswordReset: (email) => api.post("/auth/forgot-password", { email }),
+    resetPassword: (input) => api.post("/auth/reset-password", input),
+  },
+  public: {
+    trialBooking: (booking) => api.post("/public/trial-bookings", booking),
+  },
+  leads: {
+    list: (params) => api.get("/leads", { params }),
+    get: (id) => api.get(`/leads/${encodeURIComponent(id)}`),
+    setStatus: (id, status, note) => api.patch(`/leads/${encodeURIComponent(id)}/status`, { status, ...(note ? { note } : {}) }),
+    addNote: (id, note) => api.post(`/leads/${encodeURIComponent(id)}/notes`, { note }),
+    assignCourse: (id, courseId) => api.patch(`/leads/${encodeURIComponent(id)}/course`, { courseId }),
+    enroll: (id, durationMonths) => api.post(`/leads/${encodeURIComponent(id)}/enroll`, { durationMonths }),
+  },
+  analytics: {
+    event: (event) => api.post("/public/events", event),
+    summary: (params) => api.get("/analytics/summary", { params }),
   },
   users: {
     list: (params) => api.get("/users", { params }),
@@ -57,6 +145,9 @@ export const apiCalls = {
     createDietEntry: (id, entry) => api.post(`/clients/${id}/diet-entries`, entry),
     dietPlans: (id) => api.get(`/clients/${id}/diet-plans`),
     generateDietPlan: (id, input = {}) => api.post(`/clients/${id}/diet-plans/generate`, input, { timeout: 90000 }),
+    suggestDietTweak: (id, planId) => api.post(`/clients/${id}/diet-plans/${planId}/suggest-tweak`, null, { timeout: 90000 }),
+    progress: (id) => api.get(`/clients/${id}/progress`),
+    logProgress: (id, entry) => api.post(`/clients/${id}/progress`, entry),
     waivers: (id) => api.get(`/clients/${id}/waivers`),
   },
   trainers: {
@@ -78,14 +169,17 @@ export const apiCalls = {
     list: (params) => api.get("/memberships", { params }),
     create: (membership) => api.post("/memberships", membership),
     createClientCheckout: (offer) => api.post("/memberships/checkout", offer),
-    renew: (id) => api.patch(`/memberships/${id}/renew`),
+    renew: (id, body = {}) => api.patch(`/memberships/${id}/renew`, body),
     cancel: (id) => api.patch(`/memberships/${id}/cancel`),
   },
   payments: {
     list: (params) => api.get("/payments", { params }),
     reminders: () => api.get("/payments/reminders"),
+    sendReminder: (paymentId) => api.post(`/payments/reminders/${encodeURIComponent(paymentId)}/send`),
+    resolveReminder: (paymentId) => api.patch(`/payments/reminders/${encodeURIComponent(paymentId)}/resolve`),
     create: (payment) => api.post("/payments", payment),
     update: (id, payment) => api.patch(`/payments/${id}`, payment),
+    void: (id, reason) => api.post(`/payments/${id}/void`, { reason }),
     createCashfreeOrder: (order) => api.post("/payments/cashfree/orders", order),
     verifyCashfreeOrder: (orderId) => api.get(`/payments/cashfree/orders/${encodeURIComponent(orderId)}`),
   },
@@ -113,11 +207,13 @@ export const apiCalls = {
   },
   dashboard: {
     owner: () => api.get("/dashboard/owner"),
+    ownerAnalytics: (params) => api.get("/dashboard/owner/analytics", { params }),
     trainer: () => api.get("/dashboard/trainer"),
   },
   exports: {
     payments: () => api.get("/exports/payments.xlsx", { responseType: "blob" }),
     clients: () => api.get("/exports/clients.xlsx", { responseType: "blob" }),
+    report: (name, params) => api.get(`/exports/${name}.xlsx`, { params, responseType: "blob" }),
   },
 };
 
