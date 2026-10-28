@@ -80,3 +80,10 @@ screenshots/
 *_dump.sql
 *_backup.sql
 *-data.sql
+
+# Local reference archives and audit documents
+*.zip
+*.docx
+
+# Private local notes (audits, scratch documentation).
+*.local.md
