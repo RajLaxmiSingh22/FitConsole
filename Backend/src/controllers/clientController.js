@@ -2,17 +2,20 @@ import argon2 from "argon2";
 import { sequelize } from "../database.js";
 import { canAccessClient } from "../utils/access.js";
 import { Client, Member, Trainer, User, UserStatus } from "../models/index.js";
+import { getPagination, paginatedData } from "../utils/pagination.js";
 
 export async function listClients(req, res) {
   try {
-    const clients = await Client.findAll({
+    const pagination = getPagination(req.validated?.query);
+    const { rows, count } = await Client.findAndCountAll({
       where: req.user.role === "trainer"
         ? { trainerId: (await Trainer.findByPk(req.user.id, { attributes: ["id"] }))?.id ?? null }
         : {},
       include: [{ model: User, attributes: ["id", "fullName", "email"] }],
       order: [["createdAt", "DESC"]],
+      ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : {}),
     });
-    return res.json({ status: "success", data: clients });
+    return res.json({ status: "success", data: paginatedData(rows, count, pagination) });
   } catch (error) {
     console.error("Client list failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to retrieve clients." });
@@ -106,7 +109,7 @@ export async function updateClient(req, res) {
   try {
     const value = req.validated.body;
     if (req.user.role === "trainer") {
-      const allowedKeys = ["goal", "healthIssues", "injuries"];
+      const allowedKeys = ["goal", "goalCategory", "dietPreference", "allergies", "healthIssues", "injuries"];
       if (Object.keys(value).some((key) => !allowedKeys.includes(key))) {
         return res.status(403).json({ status: "error", message: "Trainers may only update health and goal fields." });
       }
