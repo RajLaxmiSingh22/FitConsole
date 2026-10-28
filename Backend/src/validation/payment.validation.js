@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { paginationKeys } from "../utils/pagination.js";
 import { dateRangeSchema, idParamsSchema, idSchema, stripUnknownFields } from "./common.validation.js";
 
 export const createPaymentSchema = stripUnknownFields(Joi.object({
@@ -13,6 +14,7 @@ export const createPaymentSchema = stripUnknownFields(Joi.object({
 export const paymentQuerySchema = dateRangeSchema.keys({
   paymentMethod: Joi.string().valid("cash", "upi", "card"),
   clientId: idSchema,
+  ...paginationKeys,
 });
 
 export const updatePaymentSchema = stripUnknownFields(Joi.object({
@@ -22,7 +24,14 @@ export const updatePaymentSchema = stripUnknownFields(Joi.object({
   reminderDate: Joi.date().iso().allow(null),
 }).min(1));
 
+export const voidPaymentSchema = stripUnknownFields(Joi.object({
+  reason: Joi.string().trim().min(1).max(500).required(),
+}));
+
 export const paymentIdParamsSchema = idParamsSchema;
+export const reminderParamsSchema = Joi.object({
+  paymentId: Joi.string().guid({ version: ["uuidv4"] }).required(),
+});
 export const clientPaymentParamsSchema = idParamsSchema;
 
 export const createCashfreeOrderSchema = stripUnknownFields(Joi.object({

@@ -5,9 +5,9 @@ const courseIncludes = [{ model: CoursePlan }, {
   model: Trainer,
   include: [
     { model: User, attributes: ["id", "fullName"] },
-    TrainerDetails,
+    { model: TrainerDetails, attributes: ["userId", "experienceYears"] },
   ],
-  attributes: ["userId", "certification", "phone"],
+  attributes: ["userId", "certification"],
 }];
 
 export async function listCourses(_req, res) {

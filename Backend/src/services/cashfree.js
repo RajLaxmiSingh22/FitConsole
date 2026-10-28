@@ -34,9 +34,12 @@ export function getCashfreeReturnUrl(orderIdPlaceholder) {
 }
 
 export function getCashfreePaymentStatus(payments) {
+  if (!payments.length) return "pending";
   if (payments.some((payment) => payment.payment_status === "SUCCESS")) return "success";
   if (payments.some((payment) => payment.payment_status === "PENDING")) return "pending";
-  return "failed";
+  return payments.every((payment) =>
+    ["FAILED", "USER_DROPPED", "CANCELLED"].includes(payment.payment_status)
+  ) ? "failed" : "pending";
 }
 
 export function getCashfreePaymentMethod(paymentGroup = "") {
