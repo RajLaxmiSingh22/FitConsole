@@ -18,9 +18,9 @@ const Membership = sequelize.define("Membership", {
   },
   totalAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, validate: { min: 0 } },
   status: {
-    type: DataTypes.ENUM("active", "expired", "cancelled"),
+    type: DataTypes.ENUM("active", "pending_payment", "expired", "cancelled"),
     allowNull: false,
-    defaultValue: "active",
+    defaultValue: "pending_payment",
   },
 }, { tableName: "memberships" });
 
