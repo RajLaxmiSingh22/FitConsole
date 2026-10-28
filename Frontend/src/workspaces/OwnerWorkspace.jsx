@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiCalls, getApiError } from "../api.js";
+import { apiCalls, getApiError, getBlobApiError } from "../api.js";
 import { openCashfreeCheckout } from "../cashfree.js";
 import {
   Button,
@@ -14,8 +14,10 @@ import {
   currency,
   dateLabel,
   initials,
+  Pager,
   responseData,
 } from "../components/ui.jsx";
+import OwnerAnalytics from "../components/OwnerAnalytics.jsx";
 
 const durations = [
   { months: 1, label: "1 month" },
@@ -53,11 +55,14 @@ function DownloadButton({ label, download }) {
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
-      link.download = label.match(/(?:clients|payments)\.xlsx/i)?.[0] ?? "fitconsole-report.xlsx";
+      const disposition = response.headers?.["content-disposition"] ?? "";
+      link.download = disposition.match(/filename="([^"]+)"/)?.[1]
+        ?? label.match(/[\w-]+\.xlsx/i)?.[0]
+        ?? "fitconsole-report.xlsx";
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (requestError) {
-      setError(getApiError(requestError, "Unable to download report."));
+      setError(await getBlobApiError(requestError, "Unable to download report."));
     } finally {
       setBusy(false);
     }
@@ -78,11 +83,12 @@ function OwnerDashboard() {
         actions={<DownloadButton label="Export payments.xlsx" download={apiCalls.exports.payments} />}
       />
       <Notice error={dashboard.error} />
-      <div className="stat-grid stat-grid--4">
+      <div className="stat-grid stat-grid--5">
         <StatCard label="Revenue this month" value={currency(data.revenueThisMonth)} detail="Payments recorded this month" />
-        <StatCard label="Active members" value={data.activeMembers ?? "—"} detail="Current active memberships" tone="success" />
+        <StatCard label="Active members" value={data.activeMembers ?? "—"} detail="Distinct clients with active memberships" tone="success" />
         <StatCard label="Expiring soon" value={data.expiringSoon?.length ?? "—"} detail="Renewals in the next 15 days" tone="warning" />
-        <StatCard label="Pending dues" value={currency(data.outstandingDues)} detail="Calculated from active plans" tone="danger" />
+        <StatCard label="Awaiting payment" value={data.awaitingPayment ?? "—"} detail="Distinct clients with unpaid memberships" tone="warning" />
+        <StatCard label="Pending dues" value={currency(data.outstandingDues)} detail="Active and awaiting-payment plans" tone="danger" />
       </div>
       <div className="dashboard-grid">
         <Card title="Renewals & dues" eyebrow="Needs attention" action={<Button variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent("fitconsole:navigate", { detail: "Clients" }))}>View clients ↗</Button>}>
@@ -109,6 +115,7 @@ function OwnerDashboard() {
           </div>
         </Card>
       </div>
+      <OwnerAnalytics />
     </>
   );
 }
@@ -137,7 +144,7 @@ function ClientCreateForm({ trainers, onCreated, onCancel }) {
       <form className="form-grid" onSubmit={submit}>
         <Field label="Full name *"><input required maxLength="255" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></Field>
         <Field label="Email *"><input type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
-        <Field label="Temporary password *"><input type="password" minLength="8" required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
+        <Field label="Temporary password *"><input type="password" minLength="12" required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
         <Field label="Phone"><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
         <Field label="Emergency contact"><input value={form.emergencyContactPhone} onChange={(event) => setForm({ ...form, emergencyContactPhone: event.target.value })} /></Field>
         <Field label="Goal"><input value={form.goal} onChange={(event) => setForm({ ...form, goal: event.target.value })} /></Field>
@@ -328,7 +335,7 @@ function TrainerDirectory({ trainers, onRefresh }) {
       {showForm && <Card title="Add trainer" eyebrow="Staff account"><form className="form-grid" onSubmit={submit}>
         <Field label="Full name *"><input required value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></Field>
         <Field label="Email *"><input type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
-        <Field label="Temporary password *"><input type="password" minLength="8" required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
+        <Field label="Temporary password *"><input type="password" minLength="12" required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
         <Field label="Phone"><input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
         <Field label="Certification"><input value={form.certification} onChange={(event) => setForm({ ...form, certification: event.target.value })} /></Field>
         <Field label="Experience (years)"><input type="number" min="0" step="0.1" value={form.experienceYears} onChange={(event) => setForm({ ...form, experienceYears: event.target.value })} /></Field>
@@ -344,14 +351,19 @@ function TrainerDirectory({ trainers, onRefresh }) {
 }
 
 function PaymentLedger({ clients, courses }) {
-  const payments = useLoad(async () => responseData(await apiCalls.payments.list()));
+  const [paymentPage, setPaymentPage] = useState(1);
+  const payments = useLoad(async () => responseData(await apiCalls.payments.list({ page: paymentPage })), [paymentPage]);
   const reminders = useLoad(async () => responseData(await apiCalls.payments.reminders()));
-  const memberships = useLoad(async () => responseData(await apiCalls.memberships.list({ status: "active" })));
+  const memberships = useLoad(async () => responseData(await apiCalls.memberships.list()));
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState({ clientId: "", membershipId: "", amount: "", paymentMethod: "upi", reference: "", reminderDate: "" });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [checkoutSaving, setCheckoutSaving] = useState(false);
+  const [voidingPaymentId, setVoidingPaymentId] = useState("");
+  const [resolvingReminderId, setResolvingReminderId] = useState("");
+  const [sendingReminderId, setSendingReminderId] = useState("");
+  const [reminderLinks, setReminderLinks] = useState({});
   useEffect(() => {
     const refresh = () => Promise.all([payments.refresh(), reminders.refresh(), memberships.refresh()]);
     window.addEventListener("fitconsole:payment-confirmed", refresh);
@@ -370,7 +382,7 @@ function PaymentLedger({ clients, courses }) {
       });
       setForm({ clientId: "", membershipId: "", amount: "", paymentMethod: "upi", reference: "", reminderDate: "" });
       setFormOpen(false);
-      await Promise.all([payments.refresh(), memberships.refresh()]);
+      await Promise.all([payments.refresh(), reminders.refresh(), memberships.refresh()]);
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to record payment."));
     } finally {
@@ -398,23 +410,61 @@ function PaymentLedger({ clients, courses }) {
       setCheckoutSaving(false);
     }
   }
+  async function voidPayment(payment) {
+    const reason = window.prompt("Why is this payment being voided?");
+    if (!reason?.trim()) return;
+    setVoidingPaymentId(payment.id);
+    setError("");
+    try {
+      await apiCalls.payments.void(payment.id, reason.trim());
+      await Promise.all([payments.refresh(), memberships.refresh()]);
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to void this payment."));
+    } finally {
+      setVoidingPaymentId("");
+    }
+  }
+  async function prepareReminder(reminder) {
+    setSendingReminderId(reminder.paymentId);
+    setError("");
+    try {
+      const result = responseData(await apiCalls.payments.sendReminder(reminder.paymentId));
+      setReminderLinks((current) => ({ ...current, [reminder.paymentId]: result.whatsappUrl }));
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to prepare this reminder."));
+    } finally {
+      setSendingReminderId("");
+    }
+  }
+  async function resolveReminder(reminder) {
+    setResolvingReminderId(reminder.paymentId);
+    setError("");
+    try {
+      await apiCalls.payments.resolveReminder(reminder.paymentId);
+      await reminders.refresh();
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to mark this reminder as resolved."));
+    } finally {
+      setResolvingReminderId("");
+    }
+  }
   if (payments.loading && !payments.data) return <LoadingState />;
-  const rows = payments.data ?? [];
-  const total = rows.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const rows = payments.data?.items ?? [];
+  const total = rows.reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
   return (
     <>
-      <PageHeader eyebrow={`${rows.length} records`} title="Payments" description="Record and reconcile cash, UPI, and card collections." actions={<Button onClick={() => setFormOpen(!formOpen)}>{formOpen ? "Close form" : "＋ Record payment"}</Button>} />
+      <PageHeader eyebrow={`${payments.data?.pagination?.total ?? rows.length} records`} title="Payments" description="Record and reconcile cash, UPI, and card collections." actions={<Button onClick={() => setFormOpen(!formOpen)}>{formOpen ? "Close form" : "＋ Record payment"}</Button>} />
       <Notice error={error || payments.error} />
       <Notice error={reminders.error} />
       <Notice error={memberships.error} />
-      <div className="stat-grid stat-grid--3"><StatCard label="Total recorded" value={currency(total)} detail="All returned payment records" /><StatCard label="UPI / cash / card" value="Owner recorded" detail="Payment method is captured per transaction" tone="success" /><StatCard label="Active courses" value={courses.length} detail="Available for enrollment" /></div>
+      <div className="stat-grid stat-grid--3"><StatCard label="Recorded on this page" value={currency(total)} detail="Excludes voided payments" /><StatCard label="UPI / cash / card" value="Owner recorded" detail="Payment method is captured per transaction" tone="success" /><StatCard label="Active courses" value={courses.length} detail="Available for enrollment" /></div>
       {formOpen && <Card title="Record payment" eyebrow="Front desk"><form className="form-grid" onSubmit={submit}>
         <Field label="Client *"><select required value={form.clientId} onChange={(event) => setForm({ ...form, clientId: event.target.value, membershipId: "" })}><option value="">Select a client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.User?.fullName} · {client.User?.email}</option>)}</select></Field>
-        <Field label="Active membership"><select value={form.membershipId} onChange={(event) => {
+        <Field label="Membership"><select value={form.membershipId} onChange={(event) => {
           const membershipId = event.target.value;
           const membership = memberships.data?.find((item) => item.id === membershipId);
           const client = clients.find((item) => item.userId === membership?.clientId);
-          const paid = (membership?.Payments ?? []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+          const paid = (membership?.Payments ?? []).reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
           setForm({
             ...form,
             membershipId,
@@ -422,9 +472,9 @@ function PaymentLedger({ clients, courses }) {
             amount: membership ? String(Math.max(0, Number(membership.totalAmount) - paid)) : form.amount,
           });
         }}><option value="">No membership</option>{(memberships.data ?? []).map((membership) => {
-          const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+          const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
           const due = Math.max(0, Number(membership.totalAmount) - paid);
-          if (!due) return null;
+          if (!due || !["active", "pending_payment"].includes(membership.status)) return null;
           return <option key={membership.id} value={membership.id}>{membership.Member?.User?.fullName ?? "Member"} · {membership.Course?.name ?? "Course"} · due {currency(due)}</option>;
         })}</select></Field>
         <Field label="Amount (₹) *"><input type="number" min="0.01" step="0.01" required value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></Field>
@@ -433,16 +483,19 @@ function PaymentLedger({ clients, courses }) {
         <Field label="Reminder date"><input type="date" value={form.reminderDate} onChange={(event) => setForm({ ...form, reminderDate: event.target.value })} /></Field>
         <div className="form-actions"><Button type="submit" disabled={saving || checkoutSaving}>{saving ? "Saving…" : "Save payment"}</Button><Button type="button" variant="outline" onClick={checkout} disabled={saving || checkoutSaving}>{checkoutSaving ? "Opening checkout…" : "Pay with Cashfree"}</Button></div>
       </form></Card>}
-      {rows.length ? <Card title="Recent payments"><div className="table-wrap"><table><thead><tr><th>Date</th><th>Client</th><th>Membership</th><th>Method</th><th>Reference</th><th>Amount</th></tr></thead><tbody>{rows.map((payment) => <tr key={payment.id}><td>{dateLabel(payment.dateTime)}</td><td>{payment.PaymentDetail?.Client?.User?.fullName ?? "Member"}</td><td>{payment.Membership?.Course?.name ?? "—"}</td><td><StatusPill tone="neutral">{payment.paymentMethod}</StatusPill></td><td>{payment.reference || "—"}</td><td className="money-cell">{currency(payment.amount)}</td></tr>)}</tbody></table></div></Card> : <EmptyState title="No payments recorded" detail="Record a payment during enrollment or from this page." />}
-      {reminders.data?.length ? <Card title="Payment reminders due" eyebrow="Reminder dates have passed"><div className="table-wrap"><table><thead><tr><th>Client</th><th>Due date</th><th>Amount</th><th>Method</th></tr></thead><tbody>{reminders.data.map((item) => <tr key={item.id}><td>{item.Client?.User?.fullName ?? "Member"}</td><td>{dateLabel(item.reminderDate)}</td><td>{currency(item.Payment?.amount)}</td><td>{item.Payment?.paymentMethod ?? "—"}</td></tr>)}</tbody></table></div><p className="muted">These are records to follow up on; FitConsole does not send reminders.</p></Card> : null}
+      {rows.length ? <Card title="Recent payments"><div className="table-wrap"><table><thead><tr><th>Date</th><th>Client</th><th>Membership</th><th>Method</th><th>Reference</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>{rows.map((payment) => <tr key={payment.id}><td>{dateLabel(payment.dateTime)}</td><td>{payment.PaymentDetail?.Client?.User?.fullName ?? "Member"}</td><td>{payment.Membership?.Course?.name ?? "—"}</td><td><StatusPill tone="neutral">{payment.paymentMethod}</StatusPill></td><td>{payment.reference || "—"}</td><td className="money-cell">{currency(payment.amount)}</td><td><StatusPill tone={payment.voidedAt ? "warning" : "success"}>{payment.voidedAt ? "voided" : "recorded"}</StatusPill></td><td>{!payment.voidedAt && <Button variant="ghost" disabled={voidingPaymentId === payment.id} onClick={() => voidPayment(payment)}>{voidingPaymentId === payment.id ? "Voiding…" : "Void"}</Button>}</td></tr>)}</tbody></table></div><Pager pagination={payments.data?.pagination} onPage={setPaymentPage} disabled={payments.loading} /></Card> : <EmptyState title="No payments recorded" detail="Record a payment during enrollment or from this page." />}
+      {reminders.data?.length ? <Card title="Payment reminders due" eyebrow="Reminder dates have passed"><div className="table-wrap"><table><thead><tr><th>Client</th><th>Due date</th><th>Amount</th><th>Method</th><th>Action</th></tr></thead><tbody>{reminders.data.map((item) => <tr key={item.paymentId}><td>{item.Client?.User?.fullName ?? "Member"}</td><td>{dateLabel(item.reminderDate)}</td><td>{currency(item.Payment?.amount)}</td><td>{item.Payment?.paymentMethod ?? "—"}</td><td><div className="row-actions">{reminderLinks[item.paymentId] ? <a className="button button--outline" href={reminderLinks[item.paymentId]} target="_blank" rel="noopener noreferrer">Open WhatsApp ↗</a> : <Button variant="outline" disabled={sendingReminderId === item.paymentId} onClick={() => prepareReminder(item)}>{sendingReminderId === item.paymentId ? "Preparing…" : "Send reminder"}</Button>}<Button variant="ghost" disabled={resolvingReminderId === item.paymentId} onClick={() => resolveReminder(item)}>{resolvingReminderId === item.paymentId ? "Resolving…" : "Mark resolved"}</Button></div></td></tr>)}</tbody></table></div><p className="muted">“Send reminder” prepares a WhatsApp message for you to send from your phone or WhatsApp Web. One reminder per member every 24 hours.</p></Card> : null}
     </>
   );
 }
 
 function AttendanceDesk({ clients, courses }) {
-  const records = useLoad(async () => responseData(await apiCalls.attendance.list()));
+  const [page, setPage] = useState(1);
+  const records = useLoad(async () => responseData(await apiCalls.attendance.list({ page })), [page]);
   const [clientId, setClientId] = useState("");
   const [courseId, setCourseId] = useState("");
+  const [override, setOverride] = useState(false);
+  const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   async function submit(event) {
@@ -450,7 +503,9 @@ function AttendanceDesk({ clients, courses }) {
     setSaving(true);
     setError("");
     try {
-      await apiCalls.attendance.checkIn({ clientId, courseId });
+      await apiCalls.attendance.checkIn({ clientId, courseId, ...(override ? { override: true, reason } : {}) });
+      setOverride(false);
+      setReason("");
       await records.refresh();
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to record check-in."));
@@ -465,16 +520,33 @@ function AttendanceDesk({ clients, courses }) {
     <Card title="Check in a member" eyebrow="New attendance"><form className="form-grid" onSubmit={submit}>
       <Field label="Client *"><select required value={clientId} onChange={(event) => setClientId(event.target.value)}><option value="">Select a client</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.User?.fullName}</option>)}</select></Field>
       <Field label="Course *"><select required value={courseId} onChange={(event) => setCourseId(event.target.value)}><option value="">Select a course</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select></Field>
+      <label className="checkbox-field"><input type="checkbox" checked={override} onChange={(event) => setOverride(event.target.checked)} /><span>Override missing active membership</span></label>
+      {override && <Field label="Override reason *"><input required minLength="1" maxLength="500" value={reason} onChange={(event) => setReason(event.target.value)} /></Field>}
       <div className="form-actions"><Button type="submit" disabled={saving}>{saving ? "Checking in…" : "Check in"}</Button></div>
     </form></Card>
-    <Card title="Recent check-ins" eyebrow="Attendance log"><div className="table-wrap"><table><thead><tr><th>Member</th><th>Course</th><th>Checked in</th></tr></thead><tbody>{(records.data ?? []).map((record) => <tr key={record.id}><td>{record.Member?.User?.fullName ?? "Member"}</td><td>{record.Course?.name ?? "—"}</td><td>{dateLabel(record.attendedAt, { hour: "numeric", minute: "2-digit", day: "numeric", month: "short" })}</td></tr>)}</tbody></table></div></Card>
+    <Card title="Recent check-ins" eyebrow="Attendance log"><div className="table-wrap"><table><thead><tr><th>Member</th><th>Course</th><th>Status</th><th>Override reason</th><th>Time</th></tr></thead><tbody>{(records.data?.items ?? []).map((record) => <tr key={record.id}><td>{record.Member?.User?.fullName ?? "Member"}</td><td>{record.Course?.name ?? "—"}</td><td>{record.override ? <StatusPill tone="warning">Override</StatusPill> : <StatusPill tone="success">Valid membership</StatusPill>}</td><td>{record.overrideReason || "—"}</td><td>{dateLabel(record.attendedAt, { hour: "numeric", minute: "2-digit", day: "numeric", month: "short" })}</td></tr>)}</tbody></table></div><Pager pagination={records.data?.pagination} onPage={setPage} disabled={records.loading} /></Card>
   </>;
 }
 
 function Reports() {
+  const [range, setRange] = useState(() => {
+    const to = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    return { from: `${to.slice(0, 8)}01`, to };
+  });
+  const report = (name) => () => apiCalls.exports.report(name, range);
   return <>
     <PageHeader eyebrow="Business exports" title="Reports" description="Download spreadsheets generated from the live FitConsole records." />
+    <Card title="Report period" eyebrow="Gym local dates · up to 366 days">
+      <div className="analytics-filters">
+        <Field label="From"><input type="date" required value={range.from} max={range.to} onChange={(event) => setRange({ ...range, from: event.target.value })} /></Field>
+        <Field label="To"><input type="date" required value={range.to} min={range.from} onChange={(event) => setRange({ ...range, to: event.target.value })} /></Field>
+      </div>
+    </Card>
     <div className="report-grid">
+      <Card title="Course revenue" eyebrow="For the period"><p className="muted">Payments and revenue per course, excluding voided payments.</p><DownloadButton label="Download course-revenue.xlsx" download={report("course-revenue")} /></Card>
+      <Card title="GST report" eyebrow="For the period"><p className="muted">Invoice number, taxable value, CGST, and SGST for each payment, treating amounts as GST-inclusive.</p><DownloadButton label="Download gst.xlsx" download={report("gst")} /></Card>
+      <Card title="Renewals & dues" eyebrow="For the period"><p className="muted">Members with an outstanding balance on memberships active during the period.</p><DownloadButton label="Download dues.xlsx" download={report("dues")} /></Card>
+      <Card title="Attendance" eyebrow="For the period"><p className="muted">Check-ins per course for each day.</p><DownloadButton label="Download attendance.xlsx" download={report("attendance")} /></Card>
       <Card title="Client directory" eyebrow="Member data"><p className="muted">Names, contact details, assigned trainer, goal, and join date.</p><DownloadButton label="Download clients.xlsx" download={apiCalls.exports.clients} /></Card>
       <Card title="Payment ledger" eyebrow="Collections"><p className="muted">Recorded payment dates, amounts, methods, and membership references.</p><DownloadButton label="Download payments.xlsx" download={apiCalls.exports.payments} /></Card>
     </div>
@@ -483,12 +555,15 @@ function Reports() {
 
 function MembershipDesk({ clients, courses }) {
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
   const memberships = useLoad(
-    async () => responseData(await apiCalls.memberships.list(status ? { status } : {})),
-    [status],
+    async () => responseData(await apiCalls.memberships.list({ page, ...(status ? { status } : {}) })),
+    [status, page],
   );
+  const membershipRows = memberships.data?.items ?? [];
   const [form, setForm] = useState({ clientId: "", courseId: "", durationMonths: "", paymentMethod: "", reference: "", recordPayment: false });
   const [error, setError] = useState("");
+  const [renewalNotice, setRenewalNotice] = useState("");
   const [saving, setSaving] = useState(false);
   const selectedCourse = courses.find((course) => course.id === form.courseId);
   const availablePlans = selectedCourse?.CoursePlans ?? [];
@@ -514,9 +589,14 @@ function MembershipDesk({ clients, courses }) {
   }
   async function updateMembership(id, action) {
     setError("");
+    setRenewalNotice("");
     try {
-      if (action === "renew") await apiCalls.memberships.renew(id);
-      else await apiCalls.memberships.cancel(id);
+      if (action === "renew") {
+        const renewed = responseData(await apiCalls.memberships.renew(id));
+        setRenewalNotice(`Renewal created. ${currency(renewed.dueAmount ?? renewed.totalAmount)} is due for the new membership.`);
+      } else {
+        await apiCalls.memberships.cancel(id);
+      }
       await memberships.refresh();
     } catch (requestError) {
       setError(getApiError(requestError, `Unable to ${action} membership.`));
@@ -524,8 +604,9 @@ function MembershipDesk({ clients, courses }) {
   }
   if (memberships.loading && !memberships.data) return <LoadingState />;
   return <>
-    <PageHeader eyebrow={`${memberships.data?.length ?? 0} memberships`} title="Memberships" description="Enroll members in course plans and manage renewals from one place." />
+    <PageHeader eyebrow={`${memberships.data?.pagination?.total ?? 0} memberships`} title="Memberships" description="Enroll members in course plans and manage renewals from one place." />
     <Notice error={error || memberships.error} />
+    <Notice tone="success" error={renewalNotice} />
     <Card title="Enroll a client" eyebrow="New membership">
       <form className="form-grid" onSubmit={enroll}>
         <Field label="Client *"><select required value={form.clientId} onChange={(event) => setForm({ ...form, clientId: event.target.value })}><option value="">Choose a member</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.User?.fullName} · {client.User?.email}</option>)}</select></Field>
@@ -540,16 +621,16 @@ function MembershipDesk({ clients, courses }) {
         <div className="form-actions"><Button type="submit" disabled={saving || !availablePlans.length}>{saving ? "Enrolling…" : "Create membership"}</Button></div>
       </form>
     </Card>
-    <Card title="Membership register" eyebrow="Status & renewals" action={<Field label="Filter"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All statuses</option><option value="active">Active</option><option value="expired">Expired</option></select></Field>}>
-      {memberships.data?.length ? <div className="table-wrap"><table><thead><tr><th>Member</th><th>Course</th><th>Start</th><th>End</th><th>Amount</th><th>Paid</th><th>Status</th><th>Actions</th></tr></thead><tbody>{memberships.data.map((membership) => {
-        const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    <Card title="Membership register" eyebrow="Status & renewals" action={<Field label="Filter"><select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="">All statuses</option><option value="active">Active</option><option value="pending_payment">Awaiting payment</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></select></Field>}>
+      {membershipRows.length ? <><div className="table-wrap"><table><thead><tr><th>Member</th><th>Course</th><th>Start</th><th>End</th><th>Amount</th><th>Paid</th><th>Status</th><th>Actions</th></tr></thead><tbody>{membershipRows.map((membership) => {
+        const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
         return <tr key={membership.id}>
         <td>{membership.Member?.User?.fullName ?? "Member"}</td><td>{membership.Course?.name ?? "—"}</td><td>{dateLabel(membership.startDate)}</td><td>{dateLabel(membership.endDate)}</td><td>{currency(membership.totalAmount)}</td>
         <td>{currency(paid)}{paid < Number(membership.totalAmount) ? <small className="muted"> · due {currency(Number(membership.totalAmount) - paid)}</small> : null}</td>
-        <td><StatusPill tone={membership.status === "active" ? "success" : membership.status === "expired" ? "warning" : "neutral"}>{membership.status}</StatusPill></td>
+        <td><StatusPill tone={membership.status === "active" ? "success" : membership.status === "pending_payment" || membership.status === "expired" ? "warning" : "neutral"}>{membership.status.replaceAll("_", " ")}</StatusPill></td>
         <td><div className="row-actions">{membership.status !== "cancelled" && <Button variant="outline" onClick={() => updateMembership(membership.id, "renew")}>Renew</Button>}{membership.status === "active" && <Button variant="ghost" onClick={() => updateMembership(membership.id, "cancel")}>Cancel</Button>}</div></td>
       </tr>;
-      })}</tbody></table></div> : <EmptyState title="No memberships found" detail="Enroll a client to add the first membership." />}
+      })}</tbody></table></div><Pager pagination={memberships.data?.pagination} onPage={setPage} disabled={memberships.loading} /></> : <EmptyState title="No memberships found" detail="Enroll a client to add the first membership." />}
     </Card>
   </>;
 }

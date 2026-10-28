@@ -15,6 +15,7 @@ import {
   responseData,
 } from "../components/ui.jsx";
 import MessageWorkspace from "./MessageWorkspace.jsx";
+import DietPlanView from "../components/DietPlanView.jsx";
 
 function TrainerHome({ onSelectClient }) {
   const [data, setData] = useState({ clients: [], stats: null, loading: true, error: "" });
@@ -66,7 +67,10 @@ function PlanDraftEditor({ plan, saving, onSave, onCancel }) {
     }
   }
   return <form className="plan-editor" onSubmit={submit}>
-    <Field label="Draft plan JSON"><textarea rows="9" value={content} onChange={(event) => setContent(event.target.value)} spellCheck="false" /></Field>
+    <details className="plan-advanced">
+      <summary>Advanced: edit plan JSON</summary>
+      <Field label="Draft plan JSON"><textarea rows="12" value={content} onChange={(event) => setContent(event.target.value)} spellCheck="false" /></Field>
+    </details>
     {error && <p className="inline-error">{error}</p>}
     <div className="form-actions"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save draft"}</Button><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button></div>
   </form>;
@@ -82,6 +86,8 @@ function TrainerClientDetail({ client, user, onBack, onMessage }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [editingPlan, setEditingPlan] = useState("");
+  const [expandedPlan, setExpandedPlan] = useState("");
+  const [notice, setNotice] = useState("");
   async function refresh() {
     setLoading(true);
     setError("");
@@ -118,6 +124,33 @@ function TrainerClientDetail({ client, user, onBack, onMessage }) {
       setBusy("");
     }
   }
+  async function checkIn() {
+    setBusy("attendance");
+    setError("");
+    setNotice("");
+    try {
+      await apiCalls.attendance.checkIn({ clientId: client.id, courseId });
+      setNotice("Check-in recorded.");
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to record attendance."));
+    } finally {
+      setBusy("");
+    }
+  }
+  async function suggestTweak(planId) {
+    setBusy(`tweak-${planId}`);
+    setError("");
+    setNotice("");
+    try {
+      await apiCalls.clients.suggestDietTweak(client.id, planId);
+      setNotice("A revised draft was created from the last four weeks of progress. Review it before approving.");
+      await refresh();
+    } catch (requestError) {
+      setError(getApiError(requestError, "Unable to suggest a plan tweak."));
+    } finally {
+      setBusy("");
+    }
+  }
   async function approvePlan(id) {
     setBusy(id);
     setError("");
@@ -148,12 +181,29 @@ function TrainerClientDetail({ client, user, onBack, onMessage }) {
     <button className="back-link" onClick={onBack}>← My clients</button>
     <PageHeader eyebrow="Assigned client" title={client.User?.fullName ?? "Member"} description={`${client.goal ? `Goal: ${client.goal}` : "Goal not set"} · ${client.phone || client.User?.email || "No contact information"}`} actions={<Button variant="outline" onClick={() => onMessage(client)}>Message</Button>} />
     <Notice error={error} />
+    <Notice tone="success" error={notice} />
     <div className="stat-grid stat-grid--4">
       <StatCard label="Latest weight" value={summary?.latestWeightKg ? `${summary.latestWeightKg} kg` : "—"} detail={summary?.latestRecordedOn ? `Logged ${dateLabel(summary.latestRecordedOn)}` : "No weight entry yet"} />
       <StatCard label="2-week change" value={summary?.weightChangeOverTwoWeeksKg == null ? "—" : `${summary.weightChangeOverTwoWeeksKg > 0 ? "+" : ""}${summary.weightChangeOverTwoWeeksKg} kg`} detail="Based on available check-ins" tone={summary?.weightChangeOverTwoWeeksKg <= 0 ? "success" : "warning"} />
       <StatCard label="Diet check-ins" value={entries.length} detail="Progress entries recorded" />
       <StatCard label="Plans to review" value={plans.filter((plan) => plan.status === "draft").length} detail="Draft plans awaiting approval" tone="danger" />
     </div>
+    <Card title="Attendance" eyebrow="Today's check-in">
+      <div className="form-grid">
+        <Field label="Course *">
+          <select value={courseId} onChange={(event) => setCourseId(event.target.value)}>
+            <option value="">Select an assigned course</option>
+            {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+          </select>
+        </Field>
+        <div className="form-actions">
+          <Button onClick={checkIn} disabled={!courseId || busy === "attendance"}>
+            {busy === "attendance" ? "Checking in…" : "Check in client"}
+          </Button>
+        </div>
+      </div>
+      <p className="muted">Attendance requires a valid membership and current waiver. Duplicate same-day check-ins are rejected.</p>
+    </Card>
     <Card title="Generate a diet plan" eyebrow="Gemini draft">
       <p className="muted">Create a draft for this client. Select an assigned course to tailor the plan, or use general fitness.</p>
       <div className="form-grid">
@@ -184,8 +234,13 @@ function TrainerClientDetail({ client, user, onBack, onMessage }) {
           <div className="plan-row">
             <div><b>{plan.plan?.title || "Trainer diet plan"}</b><small>{plan.courseId ? courses.find((course) => course.id === plan.courseId)?.name ?? "Course plan" : "General fitness"} · Created {dateLabel(plan.createdAt)}</small></div>
             <StatusPill tone={plan.status === "approved" ? "success" : "danger"}>{plan.status}</StatusPill>
-            {plan.status === "draft" && <div className="row-actions"><Button variant="outline" onClick={() => setEditingPlan(editingPlan === plan.id ? "" : plan.id)}>Edit</Button><Button onClick={() => approvePlan(plan.id)} disabled={busy === plan.id}>{busy === plan.id ? "Approving…" : "Approve"}</Button></div>}
+            <div className="row-actions">
+              <Button variant="ghost" onClick={() => setExpandedPlan(expandedPlan === plan.id ? "" : plan.id)}>{expandedPlan === plan.id ? "Hide" : "View"}</Button>
+              {plan.status === "draft" && <><Button variant="outline" onClick={() => setEditingPlan(editingPlan === plan.id ? "" : plan.id)}>Edit</Button><Button onClick={() => approvePlan(plan.id)} disabled={busy === plan.id}>{busy === plan.id ? "Approving…" : "Approve"}</Button></>}
+              {plan.status === "approved" && <Button variant="outline" onClick={() => suggestTweak(plan.id)} disabled={busy === `tweak-${plan.id}`}>{busy === `tweak-${plan.id}` ? "Drafting…" : "Suggest weekly tweak"}</Button>}
+            </div>
           </div>
+          {expandedPlan === plan.id && <DietPlanView plan={plan.plan} />}
           {editingPlan === plan.id && <PlanDraftEditor plan={plan} saving={busy === plan.id} onSave={(content) => savePlan(plan.id, content)} onCancel={() => setEditingPlan("")} />}
         </article>)}</div> : <EmptyState title="No plans yet" detail="Generate a draft plan for this client. Review it before sharing." />}
       </Card>
@@ -248,8 +303,9 @@ function TrainerPlanReview({ clients }) {
     <PageHeader eyebrow={`${drafts.length} drafts`} title="Diet plans" description="Review generated drafts before clients can see the approved plan." />
     <Notice error={error} />
     {drafts.length ? <div className="plan-grid">{drafts.map((plan) => <Card key={plan.id} title={plan.plan?.title || "Diet plan draft"} eyebrow={plan.clientName}>
-      {editingPlan === plan.id ? <PlanDraftEditor plan={plan} saving={busy === plan.id} onSave={(content) => savePlan(plan.id, content)} onCancel={() => setEditingPlan("")} /> : <pre className="plan-preview">{JSON.stringify(plan.plan, null, 2)}</pre>}
-      {editingPlan !== plan.id && <div className="row-actions"><Button variant="outline" onClick={() => setEditingPlan(plan.id)}>Edit draft</Button><Button onClick={() => approve(plan.id)} disabled={busy === plan.id}>{busy === plan.id ? "Approving…" : "Approve & send"}</Button></div>}
+      <DietPlanView plan={plan.plan} />
+      {editingPlan === plan.id && <PlanDraftEditor plan={plan} saving={busy === plan.id} onSave={(content) => savePlan(plan.id, content)} onCancel={() => setEditingPlan("")} />}
+      {editingPlan !== plan.id && <div className="row-actions"><Button variant="outline" onClick={() => setEditingPlan(plan.id)}>Advanced edit</Button><Button onClick={() => approve(plan.id)} disabled={busy === plan.id}>{busy === plan.id ? "Approving…" : "Approve & send"}</Button></div>}
     </Card>)}</div> : <EmptyState title="Nothing to review" detail="Generated diet-plan drafts will appear here." />}
   </>;
 }
