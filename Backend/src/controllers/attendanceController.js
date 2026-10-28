@@ -1,6 +1,10 @@
 import { Op } from "sequelize";
-import { Attendance, Client, Course, Member, Trainer, User } from "../models/index.js";
+import { Attendance, Client, Course, Member, Membership, Trainer, User } from "../models/index.js";
 import { canAccessClient } from "../utils/access.js";
+import { todayInGymTz } from "../utils/dates.js";
+import { isMembershipValidOnDate } from "../utils/membershipPayments.js";
+import { hasAcceptedCurrentWaiver } from "../utils/waiver.js";
+import { getPagination, paginatedData } from "../utils/pagination.js";
 
 export async function checkIn(req, res) {
   try {
@@ -15,13 +19,52 @@ export async function checkIn(req, res) {
     if (req.user.role === "trainer" && !(await canAccessClient(req.user, client.id))) {
       return res.status(404).json({ status: "error", message: "Client not found." });
     }
+    if (value.override && req.user.role !== "owner") {
+      return res.status(403).json({ status: "error", message: "Only an owner can override membership requirements." });
+    }
+    if (req.user.role === "trainer") {
+      const trainer = await Trainer.findByPk(req.user.id);
+      const assignedCourses = trainer ? await trainer.getCourses({ attributes: ["id"] }) : [];
+      if (!assignedCourses.some((assignedCourse) => assignedCourse.id === course.id)) {
+        return res.status(403).json({ status: "error", message: "You are not assigned to this course." });
+      }
+    }
+    if (!(await hasAcceptedCurrentWaiver(client.id))) {
+      return res.status(403).json({
+        status: "error",
+        message: "Accept the current training waiver first.",
+        code: "WAIVER_REQUIRED",
+      });
+    }
+    const attendedOn = todayInGymTz();
+    const activeMemberships = value.override ? [] : await Membership.findAll({
+      where: {
+        clientId: client.userId,
+        courseId: course.id,
+        status: "active",
+      },
+      attributes: ["id", "status", "startDate", "endDate"],
+    });
+    const membership = activeMemberships.find((item) => isMembershipValidOnDate(item, attendedOn));
+    if (!membership && !value.override) {
+      return res.status(409).json({
+        status: "error",
+        message: "No active membership for this course",
+      });
+    }
     const attendance = await Attendance.create({
       clientId: client.userId,
       courseId: course.id,
       trainerId: req.user.role === "trainer" ? req.user.id : null,
+      attendedOn,
+      override: Boolean(value.override),
+      overrideReason: value.override ? value.reason : null,
     });
     return res.status(201).json({ status: "success", data: attendance });
   } catch (error) {
+    if (error.name === "SequelizeUniqueConstraintError" || error.original?.code === "23505") {
+      return res.status(409).json({ status: "error", message: "This client has already checked in for this course today." });
+    }
     console.error("Attendance check-in failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to check in client." });
   }
@@ -33,21 +76,31 @@ export async function listAttendance(req, res) {
     const where = {};
     if (value.date) {
       const date = value.date.toISOString().slice(0, 10);
-      where.attendedAt = { [Op.gte]: `${date}T00:00:00.000Z`, [Op.lt]: `${date}T23:59:59.999Z` };
+      where.attendedOn = date;
     }
     const include = [
       { model: Member, include: [{ model: User, attributes: ["id", "fullName"] }] },
       Course,
     ];
     if (req.user.role === "trainer") {
-      include[0].where = { userId: { [Op.in]: await Client.findAll({ where: { trainerId: req.user.id }, attributes: ["userId"], raw: true }).then((rows) => rows.map((row) => row.userId)) } };
+      const trainer = await Trainer.findByPk(req.user.id, { attributes: ["id"] });
+      if (!trainer) return res.status(404).json({ status: "error", message: "Trainer profile not found." });
+      const assignedClients = await Client.findAll({
+        where: { trainerId: trainer.id },
+        attributes: ["userId"],
+        raw: true,
+      });
+      include[0].where = { userId: { [Op.in]: assignedClients.map((client) => client.userId) } };
     }
-    const records = await Attendance.findAll({
+    const pagination = getPagination(value);
+    const { rows, count } = await Attendance.findAndCountAll({
       where,
       include,
+      distinct: true,
       order: [["attendedAt", "DESC"]],
+      ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : {}),
     });
-    return res.json({ status: "success", data: records });
+    return res.json({ status: "success", data: paginatedData(rows, count, pagination) });
   } catch (error) {
     console.error("Attendance list failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to retrieve attendance." });

@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { paginationKeys } from "../utils/pagination.js";
 import { idParamsSchema, stripUnknownFields } from "./common.validation.js";
 
 export const createMembershipSchema = stripUnknownFields(Joi.object({
@@ -16,9 +17,14 @@ export const createClientMembershipSchema = stripUnknownFields(Joi.object({
 }));
 
 export const listMembershipsQuerySchema = Joi.object({
-  status: Joi.string().valid("active", "expired", "cancelled"),
+  status: Joi.string().valid("active", "pending_payment", "expired", "cancelled"),
   expiringWithin: Joi.number().integer().min(0).max(365),
+  ...paginationKeys,
 });
+
+export const renewMembershipSchema = stripUnknownFields(Joi.object({
+  durationMonths: Joi.number().valid(1, 3, 6, 12),
+}));
 
 export const membershipIdParamsSchema = idParamsSchema;
 export const clientMembershipParamsSchema = idParamsSchema;
