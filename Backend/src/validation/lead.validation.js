@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { DEFAULT_PAGE_SIZE } from "../utils/pagination.js";
 import { idParamsSchema, idSchema, stripUnknownFields } from "./common.validation.js";
 import { leadStatuses, normalizeIndianMobile } from "../utils/leadWorkflow.js";
 
@@ -37,7 +38,7 @@ export const leadListQuerySchema = Joi.object({
   from: Joi.date().iso(),
   to: Joi.date().iso(),
   page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(25),
+  limit: Joi.number().integer().min(1).max(100).default(DEFAULT_PAGE_SIZE),
   sort: Joi.string().valid("createdAt", "name", "status", "preferredDate").default("createdAt"),
   order: Joi.string().valid("ASC", "DESC").insensitive().default("DESC"),
 }).custom((value, helpers) => {
