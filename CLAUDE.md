@@ -6,7 +6,7 @@
 - The frontend is a React 19 application built with Vite. `Frontend/src/App.jsx` restores a JWT-backed session and selects owner, trainer, or client workspace components. Navigation is local component state rather than a router.
 - `Frontend/src/services/api.js` is the Axios API client. Requests use the configured `VITE_API_URL` or `http://localhost:9000/api`; sessions use httpOnly `SameSite=Strict` access/refresh cookies (`withCredentials`), and state-changing requests send the in-memory CSRF token as `X-CSRF-Token`.
 - The backend is an Express 5 API using Sequelize 6 with PostgreSQL, Joi validation, JWT authentication, and Argon2 password hashing. API routes are mounted under `/api` from `Backend/src/app.js`.
-- Sequelize models and relationships are registered in `Backend/src/models/index.js`. Startup authenticates to PostgreSQL, calls `sequelize.sync()` for the legacy schema, applies versioned SQL migrations from `Backend/db/migrations/`, and provisions configured owner and trainer accounts. This is additive migration support, not a fully migration-only baseline.
+- Sequelize models and relationships are registered in `Backend/src/models/index.js`. Startup authenticates to PostgreSQL, applies versioned SQL migrations from `Backend/db/migrations/` (starting with the full-schema `202610290000_baseline.sql`), and provisions configured owner and trainer accounts. `sequelize.sync()` is not used; every schema change must be a new, later-dated migration file kept in step with the models.
 - Optional integrations include Cashfree payments, Gemini diet-plan generation, and Resend password-reset email. ExcelJS supports owner exports. Cloudinary is not configured in the inspected source.
 - Backend responses use `{ status: "success", data: ... }` or `{ status: "error", message: ... }`.
 
@@ -15,7 +15,7 @@
 - Preserve the current MVC split: route modules, controllers, Sequelize models, validation schemas, middleware, and shared utilities.
 - Use `requireAuthentication`, `requireRole`, and `validateRequest` for protected API work. Role checks do not replace object-level access checks; reuse `canAccessClient` and conversation-participant checks where applicable.
 - Keep authorization and business rules on the server. Preserve the existing response envelope and API contracts unless an approved phase requires a documented extension.
-- Use database transactions for related writes. Do not rely on `sequelize.sync()` as a production schema migration strategy.
+- Use database transactions for related writes. Do not call `sequelize.sync()`; change the schema only through new migration files.
 - Continue using the existing request schemas and structured error responses. Do not silently hide failed API calls or return fabricated success data.
 - Frontend layering: `services/` (API client and other data access), `hooks/` (data loading and state), `pages/<area>/` (one screen or section per file), `layouts/`, `components/ui/` (shared controls, imported via `components/ui/index.js`), `constants/`, and `utils/` (formatters such as `currency`, `dateLabel`). API wrappers and `responseData` live in `Frontend/src/services/api.js`.
 - Public lead and analytics endpoints are under `/api/public`; owner-only lead management (including active-course assignment and enrollment) is under `/api/leads`; owner website analytics is under `/api/analytics/summary`.
