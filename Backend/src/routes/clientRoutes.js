@@ -44,6 +44,7 @@ import {
   idProofSchema,
   optionalClientIdParamsSchema,
   updateClientSchema,
+  clientHistoryQuerySchema,
   clientListQuerySchema,
 } from "../validation/index.js";
 
@@ -55,8 +56,8 @@ clientRoutes.get("/", requireRole("owner", "trainer"), validateRequest({ query: 
 clientRoutes.post("/", requireRole("owner"), validateRequest({ body: createClientSchema }), createClient);
 clientRoutes.put("/:id/id-proof", requireRole("owner", "client"), validateRequest({ params: optionalClientIdParamsSchema, body: idProofSchema }), updateClientIdProof);
 clientRoutes.patch("/:id/trainer", requireRole("owner"), validateRequest({ params: clientIdParamsSchema, body: assignTrainerSchema }), assignClientTrainer);
-clientRoutes.get("/:id/memberships", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema }), listClientMemberships);
-clientRoutes.get("/:id/payments", requireRole("owner", "client"), validateRequest({ params: clientIdParamsSchema }), listClientPayments);
+clientRoutes.get("/:id/memberships", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema, query: clientHistoryQuerySchema }), listClientMemberships);
+clientRoutes.get("/:id/payments", requireRole("owner", "client"), validateRequest({ params: clientIdParamsSchema, query: clientHistoryQuerySchema }), listClientPayments);
 clientRoutes.get("/:id/waivers", requireRole("owner", "client"), validateRequest({ params: clientIdParamsSchema }), listClientWaivers);
 clientRoutes.get("/:id/diet-entries/summary", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema }), getDietSummary);
 clientRoutes.post("/:id/diet-entries", requireRole("trainer", "client"), validateRequest({ params: clientIdParamsSchema, body: dietEntrySchema }), createDietEntry);
@@ -76,9 +77,9 @@ clientRoutes.post(
   suggestDietPlanTweak,
 );
 clientRoutes.post("/:id/progress", requireRole("trainer", "client"), validateRequest({ params: clientIdParamsSchema, body: progressEntrySchema }), createProgressEntry);
-clientRoutes.get("/:id/progress", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema }), listProgressEntries);
+clientRoutes.get("/:id/progress", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema, query: clientHistoryQuerySchema }), listProgressEntries);
 clientRoutes.get("/:id/diet-plans", requireRole("trainer", "client"), validateRequest({ params: dietPlanClientParamsSchema }), listClientDietPlans);
-clientRoutes.get("/:id/attendance", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema }), listClientAttendance);
+clientRoutes.get("/:id/attendance", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema, query: clientHistoryQuerySchema }), listClientAttendance);
 clientRoutes.get("/:id", requireRole("owner", "trainer", "client"), validateRequest({ params: clientIdParamsSchema }), getClient);
 clientRoutes.patch("/:id", requireRole("owner", "trainer"), validateRequest({ params: clientIdParamsSchema, body: updateClientSchema }), updateClient);
 

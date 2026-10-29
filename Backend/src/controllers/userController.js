@@ -1,7 +1,9 @@
+import { Op } from "sequelize";
 import argon2 from "argon2";
 import { sequelize } from "../database.js";
 import { revokeUserSessions } from "../auth.js";
 import { Trainer, TrainerDetails, User, UserStatus } from "../models/index.js";
+import { getPagination, paginatedData, searchCondition } from "../utils/pagination.js";
 
 export async function createTrainer(req, res) {
   const value = req.validated.body;
@@ -44,17 +46,27 @@ export async function createTrainer(req, res) {
 export async function listUsers(req, res) {
   try {
     const value = req.validated.query;
-    const users = await User.findAll({
-      where: value.role ? { role: value.role } : {},
+    const pagination = getPagination(value);
+    const where = { ...searchCondition(value.search, ["fullName", "email"]) };
+    if (value.role) where.role = value.role;
+    // Users without a status row are active, so an "active" filter treats a missing row as true.
+    if (value.active !== undefined) {
+      where[Op.and] = [value.active
+        ? { [Op.or]: [{ "$UserStatus.active$": true }, { "$UserStatus.user_id$": null }] }
+        : { "$UserStatus.active$": false }];
+    }
+    const { rows, count } = await User.findAndCountAll({
+      where,
       attributes: ["id", "fullName", "email", "role", "createdAt"],
+      include: [{ model: UserStatus, attributes: ["active"], required: false }],
       order: [["createdAt", "DESC"]],
+      ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : {}),
     });
-    const statuses = await UserStatus.findAll({ where: { userId: users.map((user) => user.id) } });
-    const inactiveIds = new Set(statuses.filter((status) => !status.active).map((status) => status.userId));
-    return res.json({
-      status: "success",
-      data: users.map((user) => ({ ...user.toJSON(), active: !inactiveIds.has(user.id) })),
+    const users = rows.map((user) => {
+      const { UserStatus: status, ...fields } = user.toJSON();
+      return { ...fields, active: status?.active !== false };
     });
+    return res.json({ status: "success", data: paginatedData(users, count, pagination) });
   } catch (error) {
     console.error("User list failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to retrieve users." });

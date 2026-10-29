@@ -10,7 +10,7 @@ import { isMembershipPaid } from "../utils/membershipPayments.js";
 import { hasAcceptedCurrentWaiver } from "../utils/waiver.js";
 import { writePaymentAudit } from "../services/paymentAudit.js";
 import { membershipPeriodsOverlap } from "../utils/membershipOverlap.js";
-import { getPagination, paginatedData } from "../utils/pagination.js";
+import { getPagination, paginatedData, searchCondition } from "../utils/pagination.js";
 
 export async function createMembership(req, res) {
   const value = req.validated.body;
@@ -179,6 +179,15 @@ export async function listMemberships(req, res) {
       where.status = "active";
       where.endDate = { [Op.between]: [today, until] };
     }
+    if (value.courseId) where.courseId = value.courseId;
+    // Resolve the member search first so paging stays on memberships rather than joined rows.
+    if (value.search) {
+      const members = await User.findAll({
+        where: { role: "client", ...searchCondition(value.search, ["fullName", "email"]) },
+        attributes: ["id"],
+      });
+      where.clientId = { [Op.in]: members.map((member) => member.id) };
+    }
     const pagination = getPagination(value);
     const { rows, count } = await Membership.findAndCountAll({
       distinct: true,
@@ -205,12 +214,15 @@ export async function listClientMemberships(req, res) {
     }
     const client = await Client.findByPk(req.params.id);
     if (!client) return res.status(404).json({ status: "error", message: "Client not found." });
-    const memberships = await Membership.findAll({
+    const pagination = getPagination(req.validated.query);
+    const { rows, count } = await Membership.findAndCountAll({
+      distinct: true,
       where: { clientId: client.userId },
       include: [Course, { model: Payment, attributes: ["id", "amount", "paymentMethod", "dateTime", "voidedAt"], where: { voidedAt: null }, required: false }],
       order: [["createdAt", "DESC"]],
+      ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : {}),
     });
-    return res.json({ status: "success", data: memberships });
+    return res.json({ status: "success", data: paginatedData(rows, count, pagination) });
   } catch (error) {
     console.error("Client memberships lookup failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to retrieve memberships." });

@@ -35,7 +35,14 @@ export const idProofSchema = Joi.object({
 });
 export const optionalClientIdParamsSchema = Joi.object({ id: idSchema });
 
-export const clientListQuerySchema = Joi.object({ ...paginationKeys });
+export const clientListQuerySchema = Joi.object({
+  search: Joi.string().trim().max(120).allow(""),
+  trainerId: idSchema,
+  ...paginationKeys,
+});
+
+// Opt-in paging for a single client's history lists (memberships, payments, attendance, progress).
+export const clientHistoryQuerySchema = Joi.object({ ...paginationKeys });
 
 export const progressEntrySchema = stripUnknownFields(Joi.object({
   weightKg: Joi.number().positive().max(400).allow(null),

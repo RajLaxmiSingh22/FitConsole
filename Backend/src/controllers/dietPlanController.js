@@ -9,6 +9,7 @@ import {
 } from "../services/gemini.js";
 import { canAccessClient } from "../utils/access.js";
 import { todayInGymTz } from "../utils/dates.js";
+import { getPagination, paginatedData } from "../utils/pagination.js";
 
 function generationErrorResponse(res, error) {
   if (error instanceof IncompleteProfileError) {
@@ -144,12 +145,13 @@ export async function listProgressEntries(req, res) {
     if (!(await canAccessClient(req.user, req.params.id))) {
       return res.status(404).json({ status: "error", message: "Client not found." });
     }
-    const entries = await ProgressEntry.findAll({
+    const pagination = getPagination(req.validated.query);
+    const { rows, count } = await ProgressEntry.findAndCountAll({
       where: { clientId: req.params.id },
       order: [["recordedAt", "DESC"]],
-      limit: 52,
+      ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : { limit: 52 }),
     });
-    return res.json({ status: "success", data: entries });
+    return res.json({ status: "success", data: paginatedData(rows, count, pagination) });
   } catch (error) {
     console.error("Progress list failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to retrieve progress." });
