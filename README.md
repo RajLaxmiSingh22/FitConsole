@@ -182,8 +182,13 @@ Backend/
   test/               Node.js test-runner tests
 Frontend/
   src/
-    workspaces/       Owner, trainer, and client interfaces
-    components/       Shared UI components
+    services/         API client, Cashfree checkout, analytics storage (data layer)
+    hooks/            Data loading and session/navigation state (controller layer)
+    pages/            Screens per area: public, auth, docs, owner, trainer, client, messages
+    layouts/          Authenticated app shell
+    components/       Shared UI (components/ui/) and reusable widgets
+    constants/        Navigation, routes, option lists, static copy
+    utils/            Formatting and date helpers
 PROJECT_OVERVIEW.md   Current product scope and limitations
 ```
 

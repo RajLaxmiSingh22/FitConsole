@@ -4,7 +4,7 @@
 
 - `Frontend/` and `Backend/` are independent npm projects with separate lockfiles; there is no root npm workspace.
 - The frontend is a React 19 application built with Vite. `Frontend/src/App.jsx` restores a JWT-backed session and selects owner, trainer, or client workspace components. Navigation is local component state rather than a router.
-- `Frontend/src/api.js` is the Axios API client. Requests use the configured `VITE_API_URL` or `http://localhost:9000/api`; sessions use httpOnly `SameSite=Strict` access/refresh cookies (`withCredentials`), and state-changing requests send the in-memory CSRF token as `X-CSRF-Token`.
+- `Frontend/src/services/api.js` is the Axios API client. Requests use the configured `VITE_API_URL` or `http://localhost:9000/api`; sessions use httpOnly `SameSite=Strict` access/refresh cookies (`withCredentials`), and state-changing requests send the in-memory CSRF token as `X-CSRF-Token`.
 - The backend is an Express 5 API using Sequelize 6 with PostgreSQL, Joi validation, JWT authentication, and Argon2 password hashing. API routes are mounted under `/api` from `Backend/src/app.js`.
 - Sequelize models and relationships are registered in `Backend/src/models/index.js`. Startup authenticates to PostgreSQL, calls `sequelize.sync()` for the legacy schema, applies versioned SQL migrations from `Backend/db/migrations/`, and provisions configured owner and trainer accounts. This is additive migration support, not a fully migration-only baseline.
 - Optional integrations include Cashfree payments, Gemini diet-plan generation, and Resend password-reset email. ExcelJS supports owner exports. Cloudinary is not configured in the inspected source.
@@ -17,7 +17,7 @@
 - Keep authorization and business rules on the server. Preserve the existing response envelope and API contracts unless an approved phase requires a documented extension.
 - Use database transactions for related writes. Do not rely on `sequelize.sync()` as a production schema migration strategy.
 - Continue using the existing request schemas and structured error responses. Do not silently hide failed API calls or return fabricated success data.
-- Frontend shared controls and state helpers live in `Frontend/src/components/ui.jsx`; API wrappers live in `Frontend/src/api.js`.
+- Frontend layering: `services/` (API client and other data access), `hooks/` (data loading and state), `pages/<area>/` (one screen or section per file), `layouts/`, `components/ui/` (shared controls, imported via `components/ui/index.js`), `constants/`, and `utils/` (formatters such as `currency`, `dateLabel`). API wrappers and `responseData` live in `Frontend/src/services/api.js`.
 - Public lead and analytics endpoints are under `/api/public`; owner-only lead management (including active-course assignment and enrollment) is under `/api/leads`; owner website analytics is under `/api/analytics/summary`.
 - Trial conversion links a pre-existing client/member account only. The public website has no branch, schedule, or gym-contact configuration to support invented details.
 
