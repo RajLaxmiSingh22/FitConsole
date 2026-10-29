@@ -23,11 +23,10 @@ try {
   assertCurrentWaiverConfigured();
   getGstRate();
   await sequelize.authenticate();
-  await sequelize.sync();
   await runMigrations(sequelize);
   await ensureOwnerAccount();
   await ensureTrainerAccounts();
-  console.log("PostgreSQL connection established and models synchronized.");
+  console.log("PostgreSQL connection established and migrations are up to date.");
 
   const dailyJob = process.env.RUN_JOBS === "true" ? startDailyJob() : null;
   if (dailyJob) console.log("Daily maintenance job scheduled for 00:05 gym time.");
