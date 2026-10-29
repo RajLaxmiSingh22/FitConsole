@@ -10,3 +10,8 @@ export const sendMessageSchema = Joi.object({
 });
 
 export const conversationIdParamsSchema = idParamsSchema;
+
+export const messageQuerySchema = Joi.object({
+  before: Joi.date().iso(),
+  limit: Joi.number().integer().min(1).max(100),
+});
