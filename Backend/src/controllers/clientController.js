@@ -2,15 +2,22 @@ import argon2 from "argon2";
 import { sequelize } from "../database.js";
 import { canAccessClient } from "../utils/access.js";
 import { Client, Member, Trainer, User, UserStatus } from "../models/index.js";
-import { getPagination, paginatedData } from "../utils/pagination.js";
+import { getPagination, paginatedData, searchCondition } from "../utils/pagination.js";
 
 export async function listClients(req, res) {
   try {
-    const pagination = getPagination(req.validated?.query);
+    const value = req.validated?.query ?? {};
+    const pagination = getPagination(value);
+    const where = {};
+    // Trainers always see only their own roster; owners may filter by trainer.
+    if (req.user.role === "trainer") {
+      where.trainerId = (await Trainer.findByPk(req.user.id, { attributes: ["id"] }))?.id ?? null;
+    } else if (value.trainerId) {
+      where.trainerId = value.trainerId;
+    }
+    Object.assign(where, searchCondition(value.search, ["$User.full_name$", "$User.email$", "phone"]));
     const { rows, count } = await Client.findAndCountAll({
-      where: req.user.role === "trainer"
-        ? { trainerId: (await Trainer.findByPk(req.user.id, { attributes: ["id"] }))?.id ?? null }
-        : {},
+      where,
       include: [{ model: User, attributes: ["id", "fullName", "email"] }],
       order: [["createdAt", "DESC"]],
       ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : {}),

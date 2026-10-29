@@ -135,15 +135,17 @@ export async function listClientPayments(req, res) {
     if (!(await canAccessClient(req.user, req.params.id))) {
       return res.status(404).json({ status: "error", message: "Client not found." });
     }
-    const payments = await Payment.findAll({
+    const pagination = getPagination(req.validated.query);
+    const { rows, count } = await Payment.findAndCountAll({
       include: [{
         model: PaymentDetails,
         where: { clientId: req.params.id },
         required: true,
       }],
       order: [["dateTime", "DESC"]],
+      ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : {}),
     });
-    return res.json({ status: "success", data: payments });
+    return res.json({ status: "success", data: paginatedData(rows, count, pagination) });
   } catch (error) {
     console.error("Client payment history failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to retrieve payment history." });
