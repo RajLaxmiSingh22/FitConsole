@@ -10,7 +10,7 @@ import {
 import { requireAuthentication } from "../middleware/requireAuthentication.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { validateRequest } from "../middleware/validateRequest.js";
-import { reportRangeQuerySchema } from "../utils/reportRange.js";
+import { reportRangeQuerySchema } from "../validation/index.js";
 
 const exportRoutes = Router();
 exportRoutes.use(requireAuthentication, requireRole("owner"));

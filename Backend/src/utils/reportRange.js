@@ -1,10 +1,6 @@
-import Joi from "joi";
 import { addDaysToDateString, startOfDayInGymTz, todayInGymTz } from "./dates.js";
 
 const MAX_RANGE_DAYS = 366;
-const isoDate = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).messages({ "string.pattern.base": "{#label} must be a YYYY-MM-DD date" });
-
-export const reportRangeQuerySchema = Joi.object({ from: isoDate, to: isoDate });
 
 function daysBetween(from, to) {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);

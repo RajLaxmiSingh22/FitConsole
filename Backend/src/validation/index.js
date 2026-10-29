@@ -12,3 +12,5 @@ export * from "./dietPlan.validation.js";
 export * from "./messaging.validation.js";
 export * from "./waiver.validation.js";
 export * from "./lead.validation.js";
+export * from "./report.validation.js";
+export * from "./environment.validation.js";

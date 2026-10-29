@@ -4,7 +4,7 @@ import { requireAuthentication } from "../middleware/requireAuthentication.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { getOwnerAnalytics } from "../controllers/ownerAnalyticsController.js";
 import { validateRequest } from "../middleware/validateRequest.js";
-import { reportRangeQuerySchema } from "../utils/reportRange.js";
+import { reportRangeQuerySchema } from "../validation/index.js";
 
 const dashboardRoutes = Router();
 dashboardRoutes.get("/owner", requireAuthentication, requireRole("owner"), getOwnerDashboard);

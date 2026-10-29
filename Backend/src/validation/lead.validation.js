@@ -84,3 +84,7 @@ export const analyticsSummaryQuerySchema = Joi.object({
   "dateRange.order": '"from" must be on or before "to"',
   "dateRange.range": "Date range cannot exceed 366 days",
 });
+
+export const leadEnrollmentSchema = Joi.object({
+  durationMonths: Joi.number().valid(1, 3, 6, 12).required(),
+});
