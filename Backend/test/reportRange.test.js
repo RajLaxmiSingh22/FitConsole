@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { reportRangeQuerySchema, resolveReportRange } from "../src/utils/reportRange.js";
+import { resolveReportRange } from "../src/utils/reportRange.js";
+import { reportRangeQuerySchema } from "../src/validation/index.js";
 
 test("report ranges are IST days with an inclusive end and a 90-day default", () => {
   const range = resolveReportRange({ from: "2026-10-01", to: "2026-10-31" });
