@@ -1,4 +1,4 @@
-import { StatusPill } from "./ui.jsx";
+import { StatusPill } from "./ui/index.js";
 
 function round(value) {
   return Math.round(Number(value) || 0);
