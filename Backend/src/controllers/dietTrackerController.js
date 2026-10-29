@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import { addDaysToDateString, todayInGymTz } from "../utils/dates.js";
 import { sequelize } from "../database.js";
 import { Client, DietTracker, DietTrackerAuthor } from "../models/index.js";
 import { canAccessClient } from "../utils/access.js";
@@ -86,8 +87,7 @@ export async function getDietSummary(req, res) {
     if (!(await canAccessClient(req.user, req.params.id))) {
       return res.status(404).json({ status: "error", message: "Client not found." });
     }
-    const today = new Date();
-    const twoWeeksAgo = new Date(today.getTime() - 14 * 86400000).toISOString().slice(0, 10);
+    const twoWeeksAgo = addDaysToDateString(todayInGymTz(), -14);
     const entries = await DietTracker.findAll({
       where: { clientId: req.params.id, weightKg: { [Op.ne]: null } },
       order: [["recordedOn", "DESC"]],

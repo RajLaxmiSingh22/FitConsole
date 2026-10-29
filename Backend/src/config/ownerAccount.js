@@ -1,14 +1,8 @@
 import argon2 from "argon2";
-import Joi from "joi";
 import { sequelize } from "../database.js";
 import User from "../models/User.js";
 import UserStatus from "../models/UserStatus.js";
-
-const ownerEnvironmentSchema = Joi.object({
-  OWNER_NAME: Joi.string().trim().min(1).max(255).default("FitConsole Owner"),
-  OWNER_EMAIL: Joi.string().trim().email().lowercase().required(),
-  OWNER_PASSWORD: Joi.string().min(12).max(128).required(),
-}).unknown(true);
+import { ownerEnvironmentSchema } from "../validation/index.js";
 
 export function getOwnerCredentials(environment = process.env) {
   const { value, error } = ownerEnvironmentSchema.validate(environment, {

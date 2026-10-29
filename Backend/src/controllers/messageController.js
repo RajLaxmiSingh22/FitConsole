@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
 import { Client, Conversation, ConversationParticipant, Message, Trainer, User, UserStatus } from "../models/index.js";
 import { sequelize } from "../database.js";
 
@@ -61,6 +61,10 @@ export async function listConversations(req, res) {
   }
 }
 
+export function conversationPairKey(firstUserId, secondUserId) {
+  return [firstUserId, secondUserId].sort().join(":");
+}
+
 export async function startConversation(req, res) {
   try {
     const value = req.validated.body;
@@ -76,30 +80,29 @@ export async function startConversation(req, res) {
       return res.status(403).json({ status: "error", message: "Conversation is not allowed for these users." });
     }
 
-    const existing = await Conversation.findAll({
-      include: [{
-        model: User,
-        as: "Users",
-        where: { id: [req.user.id, participant.id] },
-        attributes: ["id"],
-        through: { attributes: [] },
-        required: true,
-      }],
-    });
-    for (const conversation of existing) {
-      const participants = await conversation.getUsers({ attributes: ["id"] });
-      if (participants.length === 2 && participants.some((user) => user.id === req.user.id) &&
-        participants.some((user) => user.id === participant.id)) {
-        return res.json({ status: "success", data: conversation });
-      }
-    }
-
-    const conversation = await sequelize.transaction(async (transaction) => {
+    const result = await sequelize.transaction(async (transaction) => {
+      await sequelize.query("SELECT pg_advisory_xact_lock(hashtext(:key))", {
+        replacements: { key: `conversation:${conversationPairKey(req.user.id, participant.id)}` },
+        transaction,
+      });
+      const [match] = await sequelize.query(
+        `SELECT conversation_id FROM conversation_participants
+         GROUP BY conversation_id
+         HAVING COUNT(*) = 2
+            AND BOOL_OR(user_id = :first) AND BOOL_OR(user_id = :second)
+         LIMIT 1`,
+        {
+          replacements: { first: req.user.id, second: participant.id },
+          type: QueryTypes.SELECT,
+          transaction,
+        },
+      );
+      if (match) return { conversation: await Conversation.findByPk(match.conversation_id, { transaction }), created: false };
       const created = await Conversation.create({}, { transaction });
       await created.addUsers([req.user.id, participant.id], { transaction });
-      return created;
+      return { conversation: created, created: true };
     });
-    return res.status(201).json({ status: "success", data: conversation });
+    return res.status(result.created ? 201 : 200).json({ status: "success", data: result.conversation });
   } catch (error) {
     console.error("Conversation creation failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to start conversation." });
@@ -110,11 +113,18 @@ export async function listMessages(req, res) {
   try {
     const conversation = await getParticipantConversation(req.params.id, req.user.id);
     if (!conversation) return res.status(404).json({ status: "error", message: "Conversation not found." });
+    const query = req.validated.query ?? {};
+    const paginate = query.before !== undefined || query.limit !== undefined;
+    const where = { conversationId: conversation.id };
+    if (query.before) where.createdAt = { [Op.lt]: query.before };
+    // Without cursor params the full ascending history is returned for existing clients.
     const messages = await Message.findAll({
-      where: { conversationId: conversation.id },
+      where,
       include: [{ model: User, attributes: ["id", "fullName", "role"] }],
-      order: [["createdAt", "ASC"]],
+      order: [["createdAt", paginate ? "DESC" : "ASC"]],
+      ...(paginate ? { limit: query.limit ?? 50 } : {}),
     });
+    if (paginate) messages.reverse();
     await Message.update(
       { readAt: new Date() },
       { where: { conversationId: conversation.id, senderId: { [Op.ne]: req.user.id }, readAt: null } },
