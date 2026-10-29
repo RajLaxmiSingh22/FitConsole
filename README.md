@@ -62,7 +62,7 @@ npm run dev
 ```
 
 The API health endpoint is <http://localhost:9000/api/health>.
-The migration command runs the existing Sequelize model synchronization followed by the versioned additive SQL migrations in `Backend/db/migrations/`. Server startup also applies unapplied migrations. Review migration SQL and use a backed-up non-production database before first application.
+The migration command applies the versioned SQL migrations in `Backend/db/migrations/`; server startup does the same. A new database is created from `202610290000_baseline.sql`, which contains the full schema. A database that already applied the 13 earlier migrations just records the baseline as applied. A database that applied only some of them is refused: upgrade it with commit `a59d7ee` first. Schema changes go in new, later-dated migration files; models are not synchronized with `sequelize.sync()`. Review migration SQL and use a backed-up non-production database before first application.
 
 ### 3. Configure and start the frontend
 
@@ -149,7 +149,7 @@ The frontend currently has no test or lint script. Backend tests cover selected 
 
 ## Current limitations and release considerations
 
-- Backend startup still uses `sequelize.sync()` for the legacy schema, then applies versioned additive migrations. This is not a full migration-only baseline; production deployments should review the sync strategy and run against a backup/staging database first.
+- The schema is migration-only, starting from the 2026-10-29 baseline. Databases created before the first versioned migration (by `sequelize.sync()` alone) must be upgraded with commit `a59d7ee` before this release. Run migrations against a backup or staging database first.
 - Public endpoint throttling is in-memory and per application process. Use a shared rate-limit store before deploying multiple backend replicas.
 - Password reset email requires verified Resend sender configuration and `FRONTEND_PUBLIC_URL`; reset is unavailable until configured. Do not enable it in production with an unverified sender or HTTP URL.
 - Lead enrollment requires a member account already registered with the same phone or email. New-account invitation delivery and automated trial scheduling/confirmation are not implemented.
