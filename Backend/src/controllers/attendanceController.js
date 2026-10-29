@@ -114,12 +114,14 @@ export async function listClientAttendance(req, res) {
     }
     const client = await Client.findByPk(req.params.id);
     if (!client) return res.status(404).json({ status: "error", message: "Client not found." });
-    const records = await Attendance.findAll({
+    const pagination = getPagination(req.validated.query);
+    const { rows, count } = await Attendance.findAndCountAll({
       where: { clientId: client.userId },
       include: [Course, { model: Member, include: [{ model: User, attributes: ["id", "fullName"] }] }, { model: Trainer, include: [{ model: User, attributes: ["id", "fullName"] }] }],
       order: [["attendedAt", "DESC"]],
+      ...(pagination ? { limit: pagination.limit, offset: pagination.offset } : {}),
     });
-    return res.json({ status: "success", data: records });
+    return res.json({ status: "success", data: paginatedData(rows, count, pagination) });
   } catch (error) {
     console.error("Client attendance lookup failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to retrieve client attendance." });
