@@ -18,3 +18,4 @@ export * from "./schedule.validation.js";
 export * from "./analytics.validation.js";
 export * from "./profile.validation.js";
 export * from "./gallery.validation.js";
+export * from "./gymSettings.validation.js";

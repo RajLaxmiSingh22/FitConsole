@@ -28,6 +28,7 @@ import TrainerDetails from "./TrainerDetails.js";
 import User from "./User.js";
 import UserAvatar from "./UserAvatar.js";
 import GalleryItem from "./GalleryItem.js";
+import GymSettings from "./GymSettings.js";
 import UserStatus from "./UserStatus.js";
 import WebsiteLead from "./WebsiteLead.js";
 import WaiverAcceptance from "./WaiverAcceptance.js";
@@ -165,6 +166,7 @@ export {
   User,
   UserAvatar,
   GalleryItem,
+  GymSettings,
   UserStatus,
   WebsiteLead,
   WaiverAcceptance,
