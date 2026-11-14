@@ -166,6 +166,45 @@ npm run build
 
 The frontend currently has no test or lint script. Backend tests cover selected helpers, configuration, and validation; they do not provide comprehensive HTTP, database, authorization, or payment-provider integration coverage.
 
+## Deployment
+
+### Frontend and API must share one site
+
+Sessions use `SameSite=Strict` cookies, so the browser only sends them when the page and the API belong to the **same site** (the same registrable domain). Host them as two subdomains of one domain you own:
+
+| Part | Example | Notes |
+| --- | --- | --- |
+| Frontend (static files from `Frontend/dist`) | `https://app.example.com` | Built with `VITE_API_URL=https://api.example.com/api` |
+| API (`node src/server.js`) | `https://api.example.com` | Behind HTTPS (a reverse proxy or the host's load balancer) |
+
+Do **not** put the frontend and API on two different hosting domains (for example `myapp.vercel.app` and `myapi.onrender.com`): those are different sites, the session cookie is never sent, and every signed-in request fails with 401. Serving both from one domain (for example `example.com` for the app and `example.com/api` through a proxy) also works.
+
+### Production settings
+
+Set these in the API's environment (see `Backend/.env.example` for the full list):
+
+| Variable | Production value | Why |
+| --- | --- | --- |
+| `NODE_ENV` | `production` | Turns on production checks (HTTPS links, secure cookies by default). |
+| `COOKIE_SECURE` | `true` (default in production) | Cookies are only sent over HTTPS. Never set `false` in production. |
+| `CORS_ORIGIN` | `https://app.example.com` | The exact frontend origin(s), comma-separated; credentials are only accepted from these. |
+| `TRUST_PROXY_HOPS` | `1` behind one reverse proxy / load balancer (0–5) | Lets the API see the real client IP and HTTPS for rate limits and secure cookies. Leave `0` when nothing sits in front of Node. |
+| `FRONTEND_PUBLIC_URL` | `https://app.example.com` | Links in emails (password reset, reminders); must be HTTPS in production. |
+| `CASHFREE_RETURN_URL` | `https://app.example.com/` | Where Cashfree sends members back after paying. |
+| `JWT_SECRET` | A long random secret (32+ characters) | Signs session cookies; changing it signs everyone out. |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Your PostgreSQL | Migrations run automatically on start. |
+| `OWNER_EMAIL`, `OWNER_PASSWORD` | The owner account | Provisioned on start. |
+| `RUN_JOBS` | `true` on one instance | Daily reconciliation and reminder emails. |
+| `CLOUDINARY_URL`, `SMTP_*`, `CASHFREE_*`, `GEMINI_*` | Optional integrations | Each feature is switched off when its settings are missing. |
+
+Build the frontend with the API URL baked in:
+
+```sh
+cd Frontend && VITE_API_URL=https://api.example.com/api VITE_CASHFREE_MODE=production npm run build
+```
+
+Note that public rate limits are kept in memory per process; run one API instance (or add a shared store) before scaling out.
+
 ## Current limitations and release considerations
 
 - The schema is migration-only, starting from the 2026-10-29 baseline. Databases created before the first versioned migration (by `sequelize.sync()` alone) must be upgraded with commit `a59d7ee` before this release. Run migrations against a backup or staging database first.
