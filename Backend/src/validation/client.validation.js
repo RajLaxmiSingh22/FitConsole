@@ -6,6 +6,7 @@ import { idParamsSchema, idSchema, stripUnknownFields } from "./common.validatio
 const profileFields = {
   phone: Joi.string().max(40).allow("", null),
   emergencyContactPhone: Joi.string().max(40).allow("", null),
+  guardianName: Joi.string().trim().max(255).allow("", null),
   dateOfBirth: Joi.date().iso().allow(null),
   heightCm: Joi.number().positive().allow(null),
   weightKg: Joi.number().positive().allow(null),
@@ -18,6 +19,24 @@ const profileFields = {
   goalCategory: Joi.string().valid(...GOAL_CATEGORIES).allow(null),
   dietPreference: Joi.string().valid(...DIET_PREFERENCES).allow(null),
   allergies: Joi.array().items(Joi.string().valid(...ALLERGY_TAGS)).unique().max(ALLERGY_TAGS.length),
+  trainingDays: Joi.array().items(Joi.number().integer().min(1).max(7)).unique().min(1).max(7).allow(null),
+  targetWeightKg: Joi.number().positive().max(300).allow(null),
+  dietRestrictions: Joi.object({
+    avoid: Joi.array().items(Joi.string().trim().min(1).max(60)).max(20).default([]),
+    suitable: Joi.array().items(Joi.string().trim().min(1).max(80)).max(20).default([]),
+    source: Joi.string().trim().max(120).allow("", null),
+    since: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(null),
+    expectedDuration: Joi.string().trim().max(60).allow("", null),
+    reviewOn: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(null),
+    active: Joi.boolean().default(true),
+    notes: Joi.string().trim().max(500).allow("", null),
+  }).allow(null),
+  workoutProfile: Joi.object({
+    types: Joi.array().items(Joi.string().trim().min(1).max(60)).max(10).default([]),
+    minutesMin: Joi.number().integer().min(5).max(300).allow(null),
+    minutesMax: Joi.number().integer().min(5).max(300).allow(null),
+    notes: Joi.string().trim().max(500).allow("", null),
+  }).allow(null),
 };
 
 export const createClientSchema = stripUnknownFields(Joi.object({
@@ -35,6 +54,8 @@ export const idProofSchema = Joi.object({
 });
 export const optionalClientIdParamsSchema = Joi.object({ id: idSchema });
 
+export const clientImportQuerySchema = Joi.object({ commit: Joi.string().valid("true", "false") });
+
 export const clientListQuerySchema = Joi.object({
   search: Joi.string().trim().max(120).allow(""),
   trainerId: idSchema,
@@ -48,4 +69,12 @@ export const progressEntrySchema = stripUnknownFields(Joi.object({
   weightKg: Joi.number().positive().max(400).allow(null),
   stamina: Joi.number().integer().min(1).max(10).allow(null),
   note: Joi.string().trim().max(500).allow("", null),
-}).or("weightKg", "stamina", "note"));
+  waistCm: Joi.number().positive().max(300).allow(null),
+  chestCm: Joi.number().positive().max(300).allow(null),
+  armCm: Joi.number().positive().max(100).allow(null),
+  hipsCm: Joi.number().positive().max(300).allow(null),
+  // Optional past date for records logged after the fact; approximate when only the period is known.
+  recordedOn: Joi.date().iso().max("now").allow(null),
+  approximateDate: Joi.boolean().default(false),
+  context: Joi.string().trim().max(500).allow("", null),
+}).or("weightKg", "stamina", "note", "waistCm", "chestCm", "armCm", "hipsCm"));

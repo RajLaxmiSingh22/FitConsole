@@ -11,6 +11,7 @@ import { hasAcceptedCurrentWaiver } from "../utils/waiver.js";
 import { writePaymentAudit } from "../services/paymentAudit.js";
 import { membershipPeriodsOverlap } from "../utils/membershipOverlap.js";
 import { getPagination, paginatedData, searchCondition } from "../utils/pagination.js";
+import { courseAgeError } from "../utils/courseEligibility.js";
 
 export async function createMembership(req, res) {
   const value = req.validated.body;
@@ -29,6 +30,8 @@ export async function createMembership(req, res) {
     if (!coursePlan) {
       return res.status(404).json({ status: "error", message: "Course plan not found." });
     }
+    const ageError = courseAgeError(course, client, todayInGymTz());
+    if (ageError) return res.status(409).json({ status: "error", message: ageError, code: "AGE_NOT_ELIGIBLE" });
     const clientStatus = await UserStatus.findByPk(client.userId);
     if (clientStatus?.active === false) {
       return res.status(409).json({ status: "error", message: "This client account is deactivated." });
@@ -116,11 +119,22 @@ export async function createClientMembership(req, res) {
     if (!course || !coursePlan) {
       return res.status(404).json({ status: "error", message: "This course offer is no longer available." });
     }
+    const ageError = courseAgeError(course, client, todayInGymTz());
+    if (ageError) return res.status(409).json({ status: "error", message: ageError, code: "AGE_NOT_ELIGIBLE" });
     if (!(await hasAcceptedCurrentWaiver(client.id))) {
       return res.status(403).json({
         status: "error",
         message: "Accept the current training waiver first.",
         code: "WAIVER_REQUIRED",
+      });
+    }
+    // Online checkout needs a phone number; check it before creating an unpaid membership.
+    const member = client.phone ? null : await Member.findByPk(req.user.id, { attributes: ["phone"] });
+    if (!client.phone && !member?.phone) {
+      return res.status(400).json({
+        status: "error",
+        message: "Add your phone number in Profile before paying online.",
+        code: "PHONE_REQUIRED",
       });
     }
 

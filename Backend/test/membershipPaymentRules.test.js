@@ -8,7 +8,7 @@ import {
   totalNonVoidedPayments,
 } from "../src/utils/membershipPayments.js";
 import { todayInGymTz } from "../src/utils/dates.js";
-import { assertCurrentWaiverConfigured, hasAcceptedCurrentWaiver } from "../src/utils/waiver.js";
+import { hasAcceptedCurrentWaiver } from "../src/utils/waiver.js";
 import { getExistingPendingMembership } from "../src/utils/pendingMembership.js";
 import { checkInSchema } from "../src/validation/attendance.validation.js";
 import { voidPaymentSchema, updatePaymentSchema } from "../src/validation/payment.validation.js";
@@ -45,44 +45,27 @@ test("gym-local date calculation converts late UTC timestamps into the next IST 
   assert.equal(todayInGymTz(new Date("2026-10-27T23:30:00.000Z"), "Asia/Kolkata"), "2026-10-28");
 });
 
-test("production startup rejects missing or placeholder waiver text", () => {
-  assert.throws(() => assertCurrentWaiverConfigured({
-    NODE_ENV: "production",
-    WAIVER_TEXT: "REPLACE_WITH_APPROVED_WAIVER_TEXT",
-  }), /WAIVER_TEXT/);
-  assert.throws(() => assertCurrentWaiverConfigured({
-    NODE_ENV: "production",
-    WAIVER_TEXT: "  ",
-  }), /WAIVER_TEXT/);
-  assert.doesNotThrow(() => assertCurrentWaiverConfigured({
-    NODE_ENV: "production",
-    WAIVER_TEXT: "Approved terms",
-  }));
+test("environment waiver is used while no agreement is published, and acceptance uses its version", async () => {
+  let where;
+  const accepted = await hasAcceptedCurrentWaiver("client-id", {
+    findOne: async (query) => {
+      where = query.where;
+      return { id: "acceptance-id" };
+    },
+  }, { DocumentModel: { findOne: async () => null }, environment: { WAIVER_TEXT: "Approved terms", WAIVER_VERSION: "4" } });
+  assert.equal(accepted, true);
+  assert.deepEqual(where, { clientId: "client-id", agreementVersion: "4" });
 });
 
-test("waiver acceptance is checked against the configured current version", async () => {
-  const previous = {
-    text: process.env.WAIVER_TEXT,
-    version: process.env.WAIVER_VERSION,
-  };
-  process.env.WAIVER_TEXT = "Approved terms";
-  process.env.WAIVER_VERSION = "4";
+test("a published agreement takes priority over the environment; otherwise the built-in version is checked", async () => {
   let where;
-  try {
-    const accepted = await hasAcceptedCurrentWaiver("client-id", {
-      findOne: async (query) => {
-        where = query.where;
-        return { id: "acceptance-id" };
-      },
-    });
-    assert.equal(accepted, true);
-    assert.deepEqual(where, { clientId: "client-id", agreementVersion: "4" });
-  } finally {
-    if (previous.text === undefined) delete process.env.WAIVER_TEXT;
-    else process.env.WAIVER_TEXT = previous.text;
-    if (previous.version === undefined) delete process.env.WAIVER_VERSION;
-    else process.env.WAIVER_VERSION = previous.version;
-  }
+  const AcceptanceModel = { findOne: async (query) => { where = query.where; return null; } };
+  const published = { findOne: async () => ({ version: "7", text: "Published terms", createdAt: new Date() }) };
+  assert.equal(await hasAcceptedCurrentWaiver("client-id", AcceptanceModel, { DocumentModel: published, environment: { WAIVER_TEXT: "Old", WAIVER_VERSION: "4" } }), false);
+  assert.equal(where.agreementVersion, "7");
+  const none = { DocumentModel: { findOne: async () => null }, environment: { WAIVER_TEXT: "REPLACE_WITH_APPROVED_WAIVER_TEXT" } };
+  assert.equal(await hasAcceptedCurrentWaiver("client-id", AcceptanceModel, none), false);
+  assert.equal(where.agreementVersion, "1");
 });
 
 test("pending membership reservation expires 48-hour-old entries and locks per client", async () => {

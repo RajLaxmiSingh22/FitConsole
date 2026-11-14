@@ -87,3 +87,16 @@ screenshots/
 
 # Private local notes (audits, scratch documentation).
 *.local.md
+
+# Route audit reports (npm run audit:routes).
+route-audit-*.md
+
+# Local database backups (may contain member data).
+backups/
+
+# macOS folder metadata.
+.DS_Store
+
+# Design reference screenshots and archived notes (local only).
+design/references/
+archive/

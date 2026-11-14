@@ -1,4 +1,6 @@
 import { useState } from "react";
+import TrainingDaysPicker from "../../components/analytics/TrainingDaysPicker.jsx";
+import FitnessProfileFields, { fitnessProfilePayload } from "./FitnessProfileFields.jsx";
 import { Button, Card, Field, Notice, PageHeader } from "../../components/ui/index.js";
 import { allergyOptions, dietOptions, goalOptions } from "../../constants/memberOptions.js";
 import { apiCalls, getApiError } from "../../services/api.js";
@@ -14,6 +16,11 @@ export default function ClientProfile({ user, client, onSaved }) {
     heightCm: client.heightCm ?? "",
     weightKg: client.weightKg ?? "",
     goalCategory: client.goalCategory ?? "",
+    trainingDays: client.trainingDays ?? null,
+    targetWeightKg: client.targetWeightKg ?? "",
+    healthIssues: client.healthIssues ?? "",
+    workoutProfile: client.workoutProfile ?? null,
+    dietRestrictions: client.dietRestrictions ?? null,
     dietPreference: client.dietPreference ?? "",
     allergies: client.allergies ?? [],
   });
@@ -32,6 +39,9 @@ export default function ClientProfile({ user, client, onSaved }) {
         heightCm: form.heightCm ? Number(form.heightCm) : null,
         weightKg: form.weightKg ? Number(form.weightKg) : null,
         goalCategory: form.goalCategory || null,
+        // Unset training days stay unset (the default plan), instead of being saved as Mon/Wed/Fri.
+        trainingDays: form.trainingDays,
+        ...fitnessProfilePayload(form),
         dietPreference: form.dietPreference || null,
       });
       setMessage("Profile updated.");
@@ -60,6 +70,8 @@ export default function ClientProfile({ user, client, onSaved }) {
       <Field label="Diet type"><select value={form.dietPreference} onChange={(event) => setForm({ ...form, dietPreference: event.target.value })}><option value="">Choose a diet type</option>{dietOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
       <fieldset className="checkbox-group"><legend>Allergies</legend>{allergyOptions.map(([value, label]) => <label className="checkbox-field" key={value}><input type="checkbox" checked={form.allergies.includes(value)} onChange={(event) => setForm({ ...form, allergies: event.target.checked ? [...form.allergies, value] : form.allergies.filter((item) => item !== value) })} /><span>{label}</span></label>)}</fieldset>
       <p className="muted">Date of birth, height, weight and goal type are used to calculate meal-plan targets. Only these numbers and categories are sent to the AI planner — never your name or contact details.</p>
+      <FitnessProfileFields form={form} setForm={setForm} />
+      <TrainingDaysPicker value={form.trainingDays} onChange={(trainingDays) => setForm({ ...form, trainingDays })} />
       <div className="form-actions"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button></div>
     </form></Card>
   </>;

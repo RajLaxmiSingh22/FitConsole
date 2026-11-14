@@ -8,6 +8,24 @@ export default function AuthScreen({ onAuthenticated, apiStatus, ownerLoginOnly 
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const [demoBusy, setDemoBusy] = useState(false);
+
+  // One click into the shared demo member account; the server holds the credentials.
+  async function startDemo() {
+    setDemoBusy(true);
+    setError("");
+    try {
+      const data = responseData(await apiCalls.auth.demoLogin());
+      setSession(data);
+      window.history.replaceState(null, "", "/");
+      window.dispatchEvent(new CustomEvent("fitconsole:authenticated"));
+      onAuthenticated(data.user);
+    } catch (requestError) {
+      setError(getApiError(requestError, "The live demo is not available right now."));
+      setDemoBusy(false);
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
@@ -44,8 +62,15 @@ export default function AuthScreen({ onAuthenticated, apiStatus, ownerLoginOnly 
           {mode === "register" && <Field label="Full name"><input autoComplete="name" required maxLength="255" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></Field>}
           <Field label="Email address"><input type="email" autoComplete="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
           <Field label="Password"><input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={mode === "register" ? 12 : 1} required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></Field>
-          <Button type="submit" className="button--wide" disabled={busy || apiStatus === "unavailable"}>{busy ? "Please wait…" : mode === "login" ? "Sign in ↗" : "Create member account ↗"}</Button>
+          <Button type="submit" className="button--wide" disabled={busy || demoBusy || apiStatus === "unavailable"}>{busy ? "Please wait…" : mode === "login" ? "Sign in ↗" : "Create member account ↗"}</Button>
         </form>
+        {mode === "login" && !ownerLoginOnly && <div className="auth-demo">
+          <div className="auth-divider" aria-hidden="true"><span>or</span></div>
+          <Button type="button" variant="outline" className="button--wide auth-demo-button" onClick={startDemo} disabled={demoBusy || busy || apiStatus === "unavailable"} aria-busy={demoBusy}>
+            {demoBusy ? <><span className="loader" aria-hidden="true" />Opening demo…</> : "Explore Live Demo →"}
+          </Button>
+          <p className="auth-demo-caption">Experience FitConsole with a sample gym member account. No registration required.</p>
+        </div>}
         {!ownerLoginOnly && <p className="auth-switch">{mode === "login" ? <>New to the gym? <button onClick={() => { window.history.pushState(null, "", "/register"); setMode("register"); setError(""); }}>Create a member account</button></> : <>Already have an account? <button onClick={() => { window.history.pushState(null, "", "/login"); setMode("login"); setError(""); }}>Sign in</button></>}</p>}
         {mode === "login" && <a className="auth-forgot-link" href="/forgot-password">Forgot your password?</a>}
         <p className="auth-staff-note">Owners and trainers are provisioned by the gym administrator.</p>

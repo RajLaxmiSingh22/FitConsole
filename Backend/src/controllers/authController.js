@@ -12,38 +12,40 @@ import {
 import { loadActiveUser } from "../middleware/requireAuthentication.js";
 import { sequelize } from "../database.js";
 import { loginFailureLimiter } from "../middleware/loginFailureLimit.js";
-import { Client, Member, PasswordResetToken, User, UserStatus } from "../models/index.js";
+import { Client, Member, PasswordResetToken, User, UserAvatar, UserStatus } from "../models/index.js";
+import { avatarVersion } from "./profileController.js";
+import { isEmailConfigured, sendEmail, sendEmailInBackground } from "../services/email.js";
+import { passwordChangedEmail, passwordResetEmail, signInAlertEmail, welcomeEmail } from "../services/emailTemplates.js";
+import { frontendUrl } from "../utils/frontendUrl.js";
+import { getDemoConfig, isDemoUser } from "../utils/demo.js";
 
 // Verified when the email is unknown so response time does not reveal which accounts exist.
 const dummyPasswordHash = argon2.hash(randomBytes(32).toString("hex"));
 
 function publicUser(user) {
-  return { id: user.id, fullName: user.fullName, email: user.email, role: user.role };
+  return { id: user.id, fullName: user.fullName, email: user.email, role: user.role, ...(isDemoUser(user) ? { demo: true } : {}) };
 }
 
 function randomDelay(minMs = 100, maxMs = 400) {
   return new Promise((resolve) => setTimeout(resolve, minMs + Math.random() * (maxMs - minMs)));
 }
 
+// Password reset needs working email and a frontend URL for the reset link; returns null when either is missing.
 function getPasswordResetConfiguration() {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.AUTH_EMAIL_FROM;
-  const baseUrl = process.env.FRONTEND_PUBLIC_URL;
-  if (!apiKey || !from || !baseUrl) return null;
+  if (!isEmailConfigured()) return null;
+  const resetBase = frontendUrl("/reset-password");
+  return resetBase ? { resetBase } : null;
+}
 
-  let url;
+// Security and account emails are best effort; they never block or fail the request.
+function notify(user, template, label) {
+  if (isDemoUser(user)) return;
   try {
-    url = new URL(baseUrl);
-  } catch {
-    throw new Error("FRONTEND_PUBLIC_URL must be an absolute URL.");
+    const message = template();
+    if (message) sendEmailInBackground(user.email, message, label);
+  } catch (error) {
+    console.error(`${label} email was not prepared:`, error.message);
   }
-  if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("FRONTEND_PUBLIC_URL must use HTTP or HTTPS.");
-  }
-  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
-    throw new Error("FRONTEND_PUBLIC_URL must use HTTPS in production.");
-  }
-  return { apiKey, from, resetBase: new URL("/reset-password", url).toString() };
 }
 
 export async function register(req, res) {
@@ -64,6 +66,10 @@ export async function register(req, res) {
     });
 
     const csrfToken = await startSession(res, user);
+    notify(user, () => {
+      const loginUrl = frontendUrl("/login");
+      return loginUrl && welcomeEmail({ fullName: user.fullName, loginUrl });
+    }, "Welcome");
     return res.status(201).json({
       status: "success",
       data: { user: publicUser(user), csrfToken },
@@ -97,10 +103,36 @@ export async function login(req, res) {
     loginFailureLimiter.reset(email);
 
     const csrfToken = await startSession(res, user);
+    notify(user, () => {
+      const resetUrl = frontendUrl("/forgot-password");
+      return resetUrl && signInAlertEmail({ fullName: user.fullName, signedInAt: new Date(), resetUrl });
+    }, "Sign-in alert");
     return res.json({ status: "success", data: { user: publicUser(user), csrfToken } });
   } catch (error) {
     console.error("Login failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to log in." });
+  }
+}
+
+// One-click demo: signs in the configured demo client through the normal session flow.
+// The password never leaves the server; it is verified against the stored hash like a normal login.
+export async function demoLogin(_req, res) {
+  const demo = getDemoConfig();
+  if (!demo.enabled) {
+    return res.status(404).json({ status: "error", message: "The live demo is not available right now." });
+  }
+  try {
+    const account = await User.findOne({ where: { email: demo.email }, attributes: ["id", "passwordHash"] });
+    const user = account && await loadActiveUser(account.id);
+    if (!user || user.role !== "client" || !(await argon2.verify(account.passwordHash, demo.password))) {
+      console.error("Demo login failed: the demo client is missing or out of date. Run `npm run seed:demo`.");
+      return res.status(503).json({ status: "error", message: "The live demo is being set up. Please try again later." });
+    }
+    const csrfToken = await startSession(res, user);
+    return res.json({ status: "success", data: { user: publicUser(user), csrfToken } });
+  } catch (error) {
+    console.error("Demo login failed:", error);
+    return res.status(500).json({ status: "error", message: "Unable to open the live demo." });
   }
 }
 
@@ -133,16 +165,10 @@ export async function logout(req, res) {
 }
 
 export async function getCurrentUser(req, res) {
+  const avatar = await UserAvatar.findByPk(req.user.id, { attributes: ["userId", "updatedAt"] });
   return res.json({
     status: "success",
-    data: {
-      user: {
-        id: req.user.id,
-        fullName: req.user.fullName,
-        email: req.user.email,
-        role: req.user.role,
-      },
-    },
+    data: { user: { ...publicUser(req.user), avatarVersion: avatarVersion(avatar) } },
   });
 }
 
@@ -161,6 +187,10 @@ export async function changePassword(req, res) {
       // Every other session is revoked; this one continues with a fresh session.
       return startSession(res, user, transaction);
     });
+    notify(user, () => {
+      const resetUrl = frontendUrl("/forgot-password");
+      return resetUrl && passwordChangedEmail({ fullName: user.fullName, resetUrl });
+    }, "Password changed");
     return res.json({ status: "success", message: "Password changed.", data: { csrfToken } });
   } catch (error) {
     console.error("Password change failed:", error);
@@ -182,7 +212,8 @@ export async function requestPasswordReset(req, res) {
 
   try {
     const email = req.validated.body.email;
-    const user = await User.findOne({ where: { email }, attributes: ["id"] });
+    // The shared demo account's password can't be reset; answer exactly as for an unknown email.
+    const user = email === getDemoConfig().email ? null : await User.findOne({ where: { email }, attributes: ["id"] });
     if (!user) {
       await randomDelay();
       return res.status(202).json({
@@ -201,22 +232,11 @@ export async function requestPasswordReset(req, res) {
 
     const resetUrl = new URL(configuration.resetBase);
     resetUrl.searchParams.set("token", rawToken);
-    const delivery = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${configuration.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: configuration.from,
-        to: [email],
-        subject: "FitConsole password reset request",
-        text: `A password reset was requested for this email address. If it is linked to a FitConsole account, use this one-time link within 30 minutes:\n${resetUrl}\n\nIf you did not request this, you can ignore this email.`,
-      }),
-    });
-    if (!delivery.ok) {
+    try {
+      await sendEmail(email, passwordResetEmail({ resetUrl: resetUrl.toString(), expiresInMinutes: 30 }));
+    } catch (error) {
       await PasswordResetToken.destroy({ where: { tokenHash } });
-      console.error("Password reset email delivery failed with HTTP status:", delivery.status);
+      console.error("Password reset email delivery failed:", error.message);
       return res.status(502).json({ status: "error", message: "Unable to deliver password reset email." });
     }
 
@@ -239,7 +259,7 @@ export async function resetPassword(req, res) {
       return res.status(400).json({ status: "error", message: "This password reset link is invalid or expired." });
     }
 
-    await sequelize.transaction(async (transaction) => {
+    const user = await sequelize.transaction(async (transaction) => {
       const locked = await PasswordResetToken.findOne({
         where: { id: reset.id, usedAt: null, expiresAt: { [Op.gt]: new Date() } },
         transaction,
@@ -258,7 +278,12 @@ export async function resetPassword(req, res) {
         where: { userId: user.id, id: { [Op.ne]: locked.id } },
         transaction,
       });
+      return user;
     });
+    notify(user, () => {
+      const resetUrl = frontendUrl("/forgot-password");
+      return resetUrl && passwordChangedEmail({ fullName: user.fullName, resetUrl });
+    }, "Password changed");
     return res.json({ status: "success", message: "Password reset successfully. Please sign in again." });
   } catch (error) {
     if (error.message === "PASSWORD_RESET_TOKEN_INVALID") {

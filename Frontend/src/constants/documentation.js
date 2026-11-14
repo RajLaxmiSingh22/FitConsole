@@ -8,7 +8,7 @@ export const sections = [
 ];
 
 export const endpoints = [
-  ["GET", "/api/health", "Public", "API and database status"],
+  ["GET", "/api/health", "Public", "API and database status (returns { status: \"ok\", service, database }, not the usual envelope)"],
   ["POST", "/api/auth/register", "Public", "Create a member account"],
   ["POST", "/api/auth/login", "Public", "Sign in and receive a token"],
   ["GET", "/api/auth/me", "Any signed-in user", "Get the current user"],
