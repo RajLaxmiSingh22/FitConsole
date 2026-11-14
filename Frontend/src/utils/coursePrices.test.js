@@ -18,3 +18,28 @@ test("a longer plan cheaper than the one before it is flagged on the longer fiel
   // Gaps are compared with the nearest filled shorter plan.
   assert.deepEqual(planErrors({ 1: "1000", 6: "999" }), { 6: "Must be at least the 1 month price." });
 });
+
+import { planWarnings, valuesToEntries } from "./coursePrices.js";
+
+test("no warning when each longer plan saves per month", () => {
+  assert.deepEqual(planWarnings([{ months: 1, price: 1000 }, { months: 2, price: 1900 }, { months: 3, price: 2700 }, { months: 12, price: 10000 }]), []);
+});
+
+test("a longer plan with the same per-month price gets the 'no extra saving' warning", () => {
+  // Matches the seeded Boxing course: 2 months (₹1,960) and 3 months (₹2,940) are both ₹980 a month.
+  assert.deepEqual(planWarnings([{ months: 1, price: 1000 }, { months: 2, price: 2000 }, { months: 3, price: 3000 }]), [
+    { months: 2, shorter: 1, message: "2 months costs the same per month as 1 month — members get no extra saving." },
+    { months: 3, shorter: 2, message: "3 months costs the same per month as 2 months — members get no extra saving." },
+  ]);
+});
+
+test("a longer plan that costs more per month gets a warning too; order of entries does not matter", () => {
+  const warnings = planWarnings([{ months: 6, price: 6600 }, { months: 1, price: 1000 }, { months: 3, price: 3300 }]);
+  assert.deepEqual(warnings.map((w) => w.months), [3, 6]);
+  assert.equal(warnings[0].message, "3 months costs more per month than 1 month.");
+});
+
+test("incomplete or zero prices are ignored, and form values become entries", () => {
+  assert.deepEqual(planWarnings([{ months: 1, price: 0 }, { months: 3, price: "" }]), []);
+  assert.deepEqual(valuesToEntries({ 1: "1000", 2: "", 3: "2940" }), [{ months: 1, price: "1000" }, { months: 3, price: "2940" }]);
+});
