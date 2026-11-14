@@ -14,3 +14,7 @@ export * from "./waiver.validation.js";
 export * from "./lead.validation.js";
 export * from "./report.validation.js";
 export * from "./environment.validation.js";
+export * from "./schedule.validation.js";
+export * from "./analytics.validation.js";
+export * from "./profile.validation.js";
+export * from "./gallery.validation.js";

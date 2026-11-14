@@ -29,10 +29,11 @@ test("daily job expires by IST date, cancels old unpaid memberships and reconcil
     },
     recordSuccess: async (order) => recorded.push(order.cashfreeOrderId),
     pruneSessions: async () => 4,
+    sendReminders: async ({ today }) => ({ sent: today === "2026-10-28" ? 3 : 0 }),
     now: new Date("2026-10-27T23:30:00Z"),
   });
   assert.equal(updates[0].options.where.endDate[Op.lt], "2026-10-28");
   assert.deepEqual(recorded, ["paid"]);
   assert.deepEqual(failed, [{ status: "failed" }]);
-  assert.deepEqual(summary, { expired: 2, cancelledPending: 1, ordersRecorded: 1, ordersFailed: 1, orderErrors: 1, sessionsPruned: 4 });
+  assert.deepEqual(summary, { expired: 2, cancelledPending: 1, ordersRecorded: 1, ordersFailed: 1, orderErrors: 1, sessionsPruned: 4, remindersSent: 3 });
 });

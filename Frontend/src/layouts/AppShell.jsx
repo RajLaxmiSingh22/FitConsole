@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Notice } from "../components/ui/index.js";
+import { Avatar, Notice } from "../components/ui/index.js";
 import { navigation, roleTitles } from "../constants/navigation.js";
 import { useNavigationEvents } from "../hooks/useNavigationEvents.js";
 import { usePaymentReturn } from "../hooks/usePaymentReturn.js";
 import RoleWorkspace from "../pages/RoleWorkspace.jsx";
-import { initials } from "../utils/format.js";
+import { useProfile } from "../hooks/useProfile.js";
 
 export default function AppShell({ user, onLogout, apiStatus, accessNotice = "" }) {
   const links = navigation[user.role] ?? navigation.client;
@@ -13,6 +13,8 @@ export default function AppShell({ user, onLogout, apiStatus, accessNotice = "" 
     const requested = new URLSearchParams(window.location.search).get("section");
     return links.some(([label]) => label === requested) ? requested : links[0][0];
   });
+  const { profile } = useProfile();
+  const displayName = profile?.user.fullName ?? user.fullName;
   const paymentNotice = usePaymentReturn(user, setSection);
   useNavigationEvents(links, setSection);
 
@@ -29,9 +31,9 @@ export default function AppShell({ user, onLogout, apiStatus, accessNotice = "" 
       <header className="workspace-topbar">
         <div className="mobile-brand"><span className="brand-mark">F</span><span>FITCONSOLE</span></div>
         <div className="workspace-breadcrumb"><span>{roleTitles[user.role] ?? "MEMBER"}</span><b>/</b>{section.toUpperCase()}</div>
-        <div className="account-menu">{user.role === "owner" && <a className="docs-link workspace-docs-link" href="/docs">Documentation</a>}<span className="avatar avatar--small">{initials(user.fullName)}</span><span className="account-name"><b>{user.fullName}</b><small>{user.email}</small></span><button className="text-button logout-button" onClick={onLogout}>Log out</button></div>
+        <div className="account-menu">{user.role === "owner" && <a className="docs-link workspace-docs-link" href="/docs">Documentation</a>}<Avatar userId={user.id} name={displayName} version={profile?.avatarVersion} className="avatar avatar--small" /><span className="account-name"><b>{displayName}{user.demo && <span className="demo-pill" title="Read-only demo account">Demo</span>}</b><small>{user.email}</small></span><button className="text-button logout-button" onClick={onLogout}>Log out</button></div>
       </header>
-      <main className="workspace-content">{accessNotice && <Notice error={accessNotice} />}{paymentNotice && <Notice tone={paymentNotice.tone} error={paymentNotice.message} />}<RoleWorkspace user={user} section={section} onNavigate={setSection} /></main>
+      <main className="workspace-content">{user.demo && <div className="demo-banner" role="status"><b>Live demo</b><span>You're exploring a sample member account. Browsing works everywhere; changes and payments are turned off.</span><a href="/register" onClick={(event) => { event.preventDefault(); onLogout(); window.location.assign("/register"); }}>Create your own account ↗</a></div>}{accessNotice && <Notice error={accessNotice} />}{paymentNotice && <Notice tone={paymentNotice.tone} error={paymentNotice.message} />}<RoleWorkspace user={user} section={section} onNavigate={setSection} /></main>
       <nav className="mobile-nav" aria-label="Mobile workspace navigation">{links.map(([label, icon]) => <button key={label} className={section === label ? "mobile-nav-item is-active" : "mobile-nav-item"} onClick={() => setSection(label)}><span>{icon}</span><small>{label}</small></button>)}</nav>
     </div>
   </div>;

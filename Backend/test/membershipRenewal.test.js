@@ -53,5 +53,5 @@ test("duplicate renewal detection requires a later unexpired active membership f
 test("renewal body accepts an optional supported duration only", () => {
   assert.equal(renewMembershipSchema.validate({}).error, undefined);
   assert.equal(renewMembershipSchema.validate({ durationMonths: 6 }).error, undefined);
-  assert.ok(renewMembershipSchema.validate({ durationMonths: 2 }).error);
+  assert.ok(renewMembershipSchema.validate({ durationMonths: 4 }).error);
 });

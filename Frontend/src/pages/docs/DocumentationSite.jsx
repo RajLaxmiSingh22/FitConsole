@@ -1,5 +1,13 @@
 import React from "react";
-import { endpoints, sections } from "../../constants/documentation.js";
+import changelogMarkdown from "../../../../docs/CHANGELOG.md?raw";
+import { sections } from "../../constants/documentation.js";
+// Generated from the real Express routes by `npm run docs:generate` (Backend); never edit by hand.
+import endpoints from "../../docs/endpoints.json";
+import { parseChangelog } from "../../utils/changelog.js";
+
+const changelog = parseChangelog(changelogMarkdown);
+const latestUpdate = changelog[0]?.date ? new Date(`${changelog[0].date}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }).toUpperCase() : "";
+const CSRF_LABELS = { yes: "Required", no: "Not needed", "if signed in": "If signed in" };
 
 function Code({ children }) {
   return <code className="docs-code">{children}</code>;
@@ -12,7 +20,8 @@ export default function DocumentationSite() {
     document.title = "FitConsole Documentation";
     return () => { document.title = originalTitle; };
   }, []);
-  const filteredEndpoints = endpoints.filter((endpoint) => endpoint.join(" ").toLowerCase().includes(search.toLowerCase()));
+  const query = search.trim().toLowerCase();
+  const filteredEndpoints = endpoints.filter((endpoint) => [endpoint.method, endpoint.path, endpoint.access, endpoint.description, CSRF_LABELS[endpoint.csrf]].join(" ").toLowerCase().includes(query));
   return <div className="docs-site">
     <header className="docs-topbar">
       <a className="brand" href="/"><span className="brand-mark">F</span><span>FITCONSOLE</span></a>
@@ -29,7 +38,7 @@ export default function DocumentationSite() {
           <p className="overline"><span className="red-dot" /> OWNER DOCUMENTATION</p>
           <h1>Your gym,<br /><span>in your corner.</span></h1>
           <p>Product and API documentation for the FitConsole gym management platform. Learn how each role uses the workspace and how to connect to the API.</p>
-          <div className="docs-hero-meta"><span>PRODUCT GUIDE</span><span>API REFERENCE</span><span>UPDATED OCT 2026</span></div>
+          <div className="docs-hero-meta"><span>PRODUCT GUIDE</span><span>API REFERENCE</span>{latestUpdate && <span>UPDATED {latestUpdate}</span>}<a href="#whats-new">WHAT'S NEW ↓</a></div>
         </section>
 
         <section className="docs-section" id="getting-started">
@@ -38,9 +47,9 @@ export default function DocumentationSite() {
           <div className="docs-card-grid">
             <article className="docs-card"><span className="docs-card-index">01 / ACCOUNT</span><h3>Sign in or register</h3><p>Members can create an account from the sign-in screen. Owner and trainer accounts are provisioned by the gym owner; they cannot self-register.</p></article>
             <article className="docs-card"><span className="docs-card-index">02 / WORKSPACE</span><h3>Use your role workspace</h3><p>After sign-in, FitConsole opens the workspace that matches your account role. Navigation and data access are controlled by the API.</p></article>
-            <article className="docs-card"><span className="docs-card-index">03 / SESSION</span><h3>Keep your session safe</h3><p>The browser stores a bearer token to restore your session. Use “Log out” on shared devices to remove it from the browser.</p></article>
+            <article className="docs-card"><span className="docs-card-index">03 / SESSION</span><h3>Keep your session safe</h3><p>Your session is kept in a secure cookie that page scripts cannot read, and every change you make is checked with a separate security token. Use “Log out” on shared devices to end the session.</p></article>
           </div>
-          <div className="docs-callout"><b>LOCAL DEVELOPMENT</b><span>Start the backend and frontend in separate terminals. Set <Code>VITE_API_URL</Code> in <Code>Frontend/.env</Code> to your API base URL (defaults to <Code>http://localhost:9000/api</Code>). The backend needs database configuration, a JWT secret, and the single owner account’s <Code>OWNER_EMAIL</Code> and <Code>OWNER_PASSWORD</Code> in its environment. On startup, FitConsole creates or syncs that account and disables owner access for any other owner accounts.</span></div>
+          <div className="docs-callout"><b>LOCAL DEVELOPMENT</b><span>Start the backend and frontend in separate terminals. Set <Code>VITE_API_URL</Code> in <Code>Frontend/.env</Code> to your API base URL (defaults to <Code>http://localhost:9000/api</Code>). The backend needs database configuration, a session-signing secret (<Code>JWT_SECRET</Code>), and the single owner account’s <Code>OWNER_EMAIL</Code> and <Code>OWNER_PASSWORD</Code> in its environment. On startup, FitConsole creates or syncs that account and disables owner access for any other owner accounts.</span></div>
           <div className="docs-code-block"><div>LOCAL START COMMANDS</div><pre>{`cd Backend && npm run dev\ncd Frontend && npm run dev`}</pre></div>
         </section>
 
@@ -56,12 +65,12 @@ export default function DocumentationSite() {
 
         <section className="docs-section" id="api">
           <div className="docs-section-title"><span>03</span><div><p className="overline">FOR DEVELOPERS</p><h2>API reference</h2></div></div>
-          <p>JSON API routes are prefixed with <Code>/api</Code>. Authenticated requests use a JWT bearer token. Role and record-level authorization apply in addition to authentication.</p>
+          <p>JSON API routes are prefixed with <Code>/api</Code>. Signed-in requests use an httpOnly session cookie, and state-changing requests also send the CSRF token. Role and record-level authorization apply in addition to authentication.</p>
           <div className="docs-code-block"><div><span className="docs-live-dot" /> AUTHENTICATED REQUEST</div><pre>{`Cookie: fc_access=<httpOnly session cookie>\nX-CSRF-Token: <csrfToken from login/refresh>\nContent-Type: application/json`}</pre></div>
-          <div className="docs-callout docs-callout--subtle"><b>RESPONSE SHAPE</b><span>Most API responses use <Code>{`{ "status": "success", "data": ... }`}</Code>. Validation failures return HTTP 400 with a message and structured validation details. Never put credentials or API keys in frontend code.</span></div>
-          <div className="docs-endpoint-toolbar"><div><h3>Endpoint directory</h3><p>{filteredEndpoints.length} endpoints</p></div><input type="search" placeholder="Search paths, roles, or features" value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search API endpoints" /></div>
-          <div className="docs-table-wrap"><table className="docs-endpoint-table"><thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>Description</th></tr></thead><tbody>{filteredEndpoints.map(([method, path, access, description]) => <tr key={`${method} ${path}`}><td><span className={`http-method http-method--${method.toLowerCase()}`}>{method}</span></td><td><code>{path}</code></td><td>{access}</td><td>{description}</td></tr>)}</tbody></table>{filteredEndpoints.length === 0 && <p className="docs-no-results">No endpoints match that search.</p>}</div>
-          <p className="docs-footnote">`:id`, `:entryId`, and `:planId` are path parameters. Query filters shown with `?` are optional unless noted. The API validates request inputs using Joi.</p>
+          <div className="docs-callout docs-callout--subtle"><b>RESPONSE SHAPE</b><span>API responses use <Code>{`{ "status": "success", "data": ... }`}</Code> or <Code>{`{ "status": "error", "message": ... }`}</Code>. The one exception is the health check, <Code>GET /api/health</Code>, which returns <Code>{`{ "status": "ok", "service": ..., "database": ... }`}</Code> for uptime monitors. Validation failures return HTTP 400 with a message and structured validation details. Never put credentials or API keys in frontend code.</span></div>
+          <div className="docs-endpoint-toolbar"><div><h3>Endpoint directory</h3><p>{query ? `${filteredEndpoints.length} of ${endpoints.length} endpoints` : `${endpoints.length} endpoints`} · generated from the live routes</p></div><input type="search" placeholder="Search paths, roles, or features" value={search} onChange={(event) => setSearch(event.target.value)} aria-label="Search API endpoints" /></div>
+          <div className="docs-table-wrap"><table className="docs-endpoint-table"><thead><tr><th>Method</th><th>Endpoint</th><th>Access</th><th>CSRF token</th><th>Description</th></tr></thead><tbody>{filteredEndpoints.map(({ method, path, access, csrf, demoReadOnly, description }) => <tr key={`${method} ${path}`}><td><span className={`http-method http-method--${method.toLowerCase()}`}>{method}</span></td><td><code>{path}</code></td><td>{access}{demoReadOnly && <small className="docs-demo-note">Demo account: refused</small>}</td><td>{CSRF_LABELS[csrf]}</td><td>{description}</td></tr>)}</tbody></table>{filteredEndpoints.length === 0 && <p className="docs-no-results">No endpoints match that search.</p>}</div>
+          <p className="docs-footnote">This list is generated from the app's real routes, so it always matches what the API does. Words starting with a colon (such as <Code>:id</Code>) are placeholders for a real ID. "CSRF token: Required" means the request must send the <Code>X-CSRF-Token</Code> header from sign-in; "If signed in" means it is checked only when a session cookie is sent. Every response uses the <Code>{`{ status, data }`}</Code> shape except <Code>GET /api/health</Code>. The read-only demo account is refused on every route that changes data.</p>
         </section>
 
         <section className="docs-section" id="diet-plans">
@@ -79,7 +88,18 @@ export default function DocumentationSite() {
             <article><span>03</span><div><h3>Identity documents</h3><p>The ID-proof endpoint stores a reference string only. File upload and storage are not implemented.</p></div></article>
             <article><span>04</span><div><h3>Waiver records</h3><p>Acceptance records include the current waiver version and server-recorded timestamp. Configure waiver text and version in the backend environment.</p></div></article>
             <article><span>05</span><div><h3>Data & availability</h3><p>Dashboard values reflect data returned by the current API. Some reporting ideas shown in design references, such as revenue breakdowns by peak hour, are not currently exposed as API metrics.</p></div></article>
+            <article><span>06</span><div><h3>Demo account</h3><p>The one-click demo member is read-only: the server refuses every change it tries to make, including payments. Pressing Pay opens a short explanation with "Create my account" (sign up, then return to the same plan) or "Maybe later". There is no test-payment mode.</p></div></article>
           </div>
+        </section>
+
+        <section className="docs-section" id="whats-new">
+          <div className="docs-section-title"><span>06</span><div><p className="overline">CHANGELOG</p><h2>What's new</h2></div></div>
+          <p>Every change to the app, newest first, with what (if anything) you need to do.</p>
+          <div className="docs-changelog">{changelog.map((entry) => <article key={`${entry.date}-${entry.title}`} className="docs-change">
+            <header><time dateTime={entry.date}>{new Date(`${entry.date}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</time><h3>{entry.title}</h3></header>
+            <div><b>What changed</b><ul>{entry.changed.map((item) => <li key={item}>{item}</li>)}</ul></div>
+            <div className={entry.todo.join(" ").trim().toLowerCase() === "nothing." ? "docs-change-todo is-none" : "docs-change-todo"}><b>What you need to do</b><ul>{entry.todo.map((item) => <li key={item}>{item}</li>)}</ul></div>
+          </article>)}</div>
         </section>
         <footer className="docs-footer"><a className="brand" href="/"><span className="brand-mark">F</span><span>FITCONSOLE</span></a><span>TRAIN HARD. EAT SMART. GROW FASTER.</span><a href="#">BACK TO TOP ↑</a></footer>
       </main>

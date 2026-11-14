@@ -1,16 +1,14 @@
 import { load } from "@cashfreepayments/cashfree-js";
 
-let cashfreePromise;
+const cashfreePromises = {};
 
-export async function openCashfreeCheckout(paymentSessionId) {
-  cashfreePromise ??= load({
-    mode: import.meta.env.VITE_CASHFREE_MODE === "production" ? "production" : "sandbox",
-  });
+export async function openCashfreeCheckout(paymentSessionId, mode = import.meta.env.VITE_CASHFREE_MODE === "production" ? "production" : "sandbox") {
+  cashfreePromises[mode] ??= load({ mode });
   let cashfree;
   try {
-    cashfree = await cashfreePromise;
+    cashfree = await cashfreePromises[mode];
   } catch (error) {
-    cashfreePromise = undefined;
+    delete cashfreePromises[mode];
     throw error;
   }
   if (!cashfree) {

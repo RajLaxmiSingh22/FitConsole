@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DietPlanView from "../../components/DietPlanView.jsx";
 import { Button, Card, EmptyState, Field, LoadingState, Notice, PageHeader, StatCard, StatusPill } from "../../components/ui/index.js";
 import { apiCalls, getApiError, responseData } from "../../services/api.js";
 import { dateLabel } from "../../utils/format.js";
+import DietProfileForm from "./DietProfileForm.jsx";
 import PlanDraftEditor from "./PlanDraftEditor.jsx";
 
 export default function TrainerClientDetail({ client, user, onBack, onMessage }) {
@@ -17,6 +18,8 @@ export default function TrainerClientDetail({ client, user, onBack, onMessage })
   const [editingPlan, setEditingPlan] = useState("");
   const [expandedPlan, setExpandedPlan] = useState("");
   const [notice, setNotice] = useState("");
+  const [profileReady, setProfileReady] = useState(false);
+  const onReadyChange = useCallback((ready) => setProfileReady(ready), []);
   async function refresh() {
     setLoading(true);
     setError("");
@@ -46,6 +49,7 @@ export default function TrainerClientDetail({ client, user, onBack, onMessage })
     setError("");
     try {
       await apiCalls.clients.generateDietPlan(client.id, courseId ? { courseId } : {});
+      setNotice("Draft diet plan created. Review it below before approving.");
       await refresh();
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to generate a diet plan."));
@@ -134,8 +138,9 @@ export default function TrainerClientDetail({ client, user, onBack, onMessage })
       <p className="muted">Attendance requires a valid membership and current waiver. Duplicate same-day check-ins are rejected.</p>
     </Card>
     <Card title="Generate a diet plan" eyebrow="Gemini draft">
-      <p className="muted">Create a draft for this client. Select an assigned course to tailor the plan, or use general fitness.</p>
-      <div className="form-grid">
+      <p className="muted">Check the client's diet profile, then create a draft. Select an assigned course to tailor the plan, or use general fitness.</p>
+      <DietProfileForm clientId={client.id} onReadyChange={onReadyChange} />
+      <div className="form-grid diet-generate">
         <Field label="Course">
           <select value={courseId} onChange={(event) => setCourseId(event.target.value)}>
             <option value="">General fitness</option>
@@ -143,9 +148,10 @@ export default function TrainerClientDetail({ client, user, onBack, onMessage })
           </select>
         </Field>
         <div className="form-actions">
-          <Button onClick={generatePlan} disabled={busy === "generate"}>
-            {busy === "generate" ? "Generating…" : "✳ Generate AI plan"}
+          <Button onClick={generatePlan} disabled={busy === "generate" || !profileReady}>
+            {busy === "generate" ? "Generating… (up to a minute)" : "✳ Generate AI plan"}
           </Button>
+          {!profileReady && <span className="muted">Complete the diet profile above first.</span>}
         </div>
       </div>
     </Card>

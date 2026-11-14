@@ -19,11 +19,33 @@ export default function OwnerDashboard() {
       />
       <Notice error={dashboard.error} />
       <div className="stat-grid stat-grid--5">
+        <StatCard label="Total clients" value={data.totalClients ?? "—"} detail="Member profiles" />
+        <StatCard label="Active memberships" value={data.activeMembers ?? "—"} detail="Members training now" tone="success" />
+        <StatCard label="Expired memberships" value={data.expiredMemberships ?? "—"} detail="Members to win back" />
+        <StatCard label="Trainers" value={data.totalTrainers ?? "—"} detail="Coaching team" />
+        <StatCard label="Today's attendance" value={data.todaysAttendance ?? "—"} detail="Check-ins so far today" tone="success" />
+      </div>
+      <div className="stat-grid stat-grid--4">
         <StatCard label="Revenue this month" value={currency(data.revenueThisMonth)} detail="Payments recorded this month" />
-        <StatCard label="Active members" value={data.activeMembers ?? "—"} detail="Distinct clients with active memberships" tone="success" />
         <StatCard label="Expiring soon" value={data.expiringSoon?.length ?? "—"} detail="Renewals in the next 15 days" tone="warning" />
         <StatCard label="Awaiting payment" value={data.awaitingPayment ?? "—"} detail="Distinct clients with unpaid memberships" tone="warning" />
         <StatCard label="Pending dues" value={currency(data.outstandingDues)} detail="Active and awaiting-payment plans" tone="danger" />
+      </div>
+      <div className="dashboard-grid">
+        <Card title="Recent payments" eyebrow="Latest collections" action={<Button variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent("fitconsole:navigate", { detail: "Payments" }))}>All payments ↗</Button>}>
+          {data.recentPayments?.length ? <ul className="history-list">{data.recentPayments.map((payment) => <li key={payment.id}>
+            <span><b>{payment.member}</b><small>{payment.course ?? "Payment"} · {dateLabel(payment.paidAt, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</small></span>
+            <StatusPill tone="neutral">{payment.method.toUpperCase()}</StatusPill>
+            <span className="history-amount">{currency(payment.amount)}</span>
+          </li>)}</ul> : <EmptyState title="No payments yet" />}
+        </Card>
+        <Card title="Recent check-ins" eyebrow="Front desk" action={<Button variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent("fitconsole:navigate", { detail: "Attendance" }))}>Attendance ↗</Button>}>
+          {data.recentAttendance?.length ? <ul className="history-list">{data.recentAttendance.map((visit) => <li key={visit.id}>
+            <span><b>{visit.member}</b><small>{visit.course ?? "Visit"}</small></span>
+            <StatusPill tone={visit.checkedOutAt ? "neutral" : "success"}>{visit.checkedOutAt ? "Checked out" : "In gym"}</StatusPill>
+            <span className="history-amount">{dateLabel(visit.at, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span>
+          </li>)}</ul> : <EmptyState title="No check-ins yet" />}
+        </Card>
       </div>
       <div className="dashboard-grid">
         <Card title="Renewals & dues" eyebrow="Needs attention" action={<Button variant="ghost" onClick={() => window.dispatchEvent(new CustomEvent("fitconsole:navigate", { detail: "Clients" }))}>View clients ↗</Button>}>

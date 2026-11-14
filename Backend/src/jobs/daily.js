@@ -5,6 +5,7 @@ import { sequelize } from "../database.js";
 import { CashfreeOrder, Membership } from "../models/index.js";
 import { getCashfreeClient, getCashfreePaymentStatus } from "../services/cashfree.js";
 import { recordCashfreeSuccess } from "../services/cashfreePayment.js";
+import { sendMembershipEndingReminders } from "../services/membershipReminders.js";
 import { todayInGymTz } from "../utils/dates.js";
 
 const DAILY_JOB_LOCK_KEY = "fitconsole:daily-job";
@@ -28,6 +29,7 @@ export async function runDailyJob({
   },
   recordSuccess = recordCashfreeSuccess,
   pruneSessions = pruneExpiredRefreshTokens,
+  sendReminders = sendMembershipEndingReminders,
   now = new Date(),
 } = {}) {
   const today = todayInGymTz(now);
@@ -52,7 +54,14 @@ export async function runDailyJob({
     ordersFailed: 0,
     orderErrors: 0,
     sessionsPruned: await pruneSessions(now),
+    remindersSent: 0,
   };
+  try {
+    summary.remindersSent = (await sendReminders({ today })).sent;
+  } catch (error) {
+    // Reminder emails must not stop expiry or payment reconciliation.
+    console.error("Daily job could not send membership reminders:", error.message);
+  }
   const staleOrders = await OrderModel.findAll({ where: { status: "pending", expiresAt: { [Op.lte]: now } } });
   for (const order of staleOrders) {
     try {
@@ -101,7 +110,7 @@ export function startDailyJob() {
       console.log(
         `Daily job: ${summary.expired} memberships expired, ${summary.cancelledPending} unpaid cancelled, `
         + `${summary.ordersRecorded} Cashfree orders recorded, ${summary.ordersFailed} failed, ${summary.orderErrors} errors, `
-        + `${summary.sessionsPruned} expired sessions pruned.`,
+        + `${summary.sessionsPruned} expired sessions pruned, ${summary.remindersSent} membership reminders emailed.`,
       );
     } catch (error) {
       console.error("Daily job failed:", error);

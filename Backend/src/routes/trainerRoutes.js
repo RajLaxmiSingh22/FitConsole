@@ -13,7 +13,7 @@ import { validateRequest } from "../middleware/validateRequest.js";
 import { trainerIdParamsSchema, trainerProfileSchema } from "../validation/index.js";
 
 const trainerRoutes = Router();
-trainerRoutes.get("/", listTrainers);
+trainerRoutes.get("/", optionalAuthentication, listTrainers);
 trainerRoutes.get("/me/clients", requireAuthentication, requireRole("trainer"), listMyClients);
 trainerRoutes.patch("/me", requireAuthentication, requireRole("trainer"), validateRequest({ body: trainerProfileSchema }), updateMyTrainer);
 trainerRoutes.get("/:id", optionalAuthentication, validateRequest({ params: trainerIdParamsSchema }), getTrainer);

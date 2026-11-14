@@ -168,3 +168,13 @@ test("unexpected schema failures return a safe server error", () => {
     console.error = originalConsoleError;
   }
 });
+
+test("trainer public profile accepts a short bio, up to 6 achievements and 6 specialties", async () => {
+  const { trainerProfileSchema } = await import("../src/validation/index.js");
+  const ok = trainerProfileSchema.validate({ bio: "  Former national boxer.  ", achievements: ["National bronze 2016"], specialties: ["Boxing"] });
+  assert.equal(ok.error, undefined);
+  assert.equal(ok.value.bio, "Former national boxer.");
+  assert.ok(trainerProfileSchema.validate({ achievements: Array(7).fill("x") }).error);
+  assert.ok(trainerProfileSchema.validate({ bio: "x".repeat(601) }).error);
+  assert.ok(trainerProfileSchema.validate({ specialties: [""] }).error);
+});

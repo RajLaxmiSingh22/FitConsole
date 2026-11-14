@@ -1,3 +1,4 @@
+import { PLAN_DURATIONS } from "../utils/plans.js";
 import Joi from "joi";
 import { DEFAULT_PAGE_SIZE } from "../utils/pagination.js";
 import { idParamsSchema, idSchema, stripUnknownFields } from "./common.validation.js";
@@ -87,5 +88,5 @@ export const analyticsSummaryQuerySchema = Joi.object({
 });
 
 export const leadEnrollmentSchema = Joi.object({
-  durationMonths: Joi.number().valid(1, 3, 6, 12).required(),
+  durationMonths: Joi.number().valid(...PLAN_DURATIONS).required(),
 });

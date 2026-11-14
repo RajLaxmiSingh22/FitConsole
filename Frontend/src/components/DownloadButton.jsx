@@ -2,7 +2,7 @@ import { useState } from "react";
 import { getBlobApiError } from "../services/api.js";
 import { Button } from "./ui/index.js";
 
-export default function DownloadButton({ label, download }) {
+export default function DownloadButton({ label, download, filename, variant = "outline" }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function handleDownload() {
@@ -14,7 +14,7 @@ export default function DownloadButton({ label, download }) {
       const link = document.createElement("a");
       link.href = url;
       const disposition = response.headers?.["content-disposition"] ?? "";
-      link.download = disposition.match(/filename="([^"]+)"/)?.[1]
+      link.download = filename ?? disposition.match(/filename="([^"]+)"/)?.[1]
         ?? label.match(/[\w-]+\.xlsx/i)?.[0]
         ?? "fitconsole-report.xlsx";
       link.click();
@@ -25,5 +25,5 @@ export default function DownloadButton({ label, download }) {
       setBusy(false);
     }
   }
-  return <><Button variant="outline" onClick={handleDownload} disabled={busy}>{busy ? "Preparing…" : label}</Button>{error && <span className="inline-error">{error}</span>}</>;
+  return <><Button variant={variant} onClick={handleDownload} disabled={busy}>{busy ? "Preparing…" : label}</Button>{error && <span className="inline-error">{error}</span>}</>;
 }

@@ -250,7 +250,7 @@ test("client offer selection accepts only course and published duration fields",
     createClientMembershipSchema.validate({ courseId, durationMonths: 3 }).error,
     undefined,
   );
-  assert.ok(createClientMembershipSchema.validate({ courseId, durationMonths: 2 }).error);
+  assert.ok(createClientMembershipSchema.validate({ courseId, durationMonths: 4 }).error);
   assert.equal(
     createClientMembershipSchema.validate({ courseId, durationMonths: 3, price: 1 }).value.price,
     undefined,
