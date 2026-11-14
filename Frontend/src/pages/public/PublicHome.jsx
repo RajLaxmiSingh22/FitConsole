@@ -1,6 +1,7 @@
 import { LoadingState, Notice } from "../../components/ui/index.js";
 import { isOpenNow, openingHoursSummary } from "../../constants/openingHours.js";
-import { heroMedia } from "../../constants/media.js";
+import { courseCover, heroMedia } from "../../constants/media.js";
+import { clampWords } from "../../utils/text.js";
 import { timeLabel, todayWeekday } from "../../constants/schedule.js";
 import { useLoad } from "../../hooks/useLoad.js";
 import { apiCalls, responseData } from "../../services/api.js";
@@ -108,10 +109,15 @@ export default function PublicHome({ catalog }) {
       {catalog.loading ? <LoadingState label="Loading programs…" />
         : !catalog.courses.length ? <p className="public-unconfigured">Programs are not configured yet.</p>
         : <div className="fight-grid">{catalog.courses.slice(0, 5).map((course, index) => <Reveal as="article" index={index} key={course.id} className="fight-card">
-          <span className="fight-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-          <span className="fight-level">{LEVEL_LABELS[course.level] ?? course.category ?? "Program"}</span>
-          <h3>{course.name}</h3>
-          <p>{course.description || "Ask the gym for details about this program."}</p>
+          <div className="fight-cover">
+            <img src={courseCover(course, 600).src} alt={courseCover(course, 600).alt || `${course.name} cover`} loading="lazy" />
+            <span className="fight-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+          </div>
+          <div className="fight-body">
+            <div className="fight-tags"><span className="fight-tag">{course.category || "Program"}</span>{LEVEL_LABELS[course.level] && <small className="fight-level">{LEVEL_LABELS[course.level]}</small>}</div>
+            <h3>{course.name}</h3>
+            <p>{clampWords(course.description || "Ask the gym for details about this program.", 110)}</p>
+          </div>
           <a href={`/trial?courseId=${encodeURIComponent(course.id)}`}>Explore →<span className="sr-only"> {course.name}</span></a>
         </Reveal>)}</div>}
     </section>
