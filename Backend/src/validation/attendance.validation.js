@@ -5,6 +5,8 @@ import { idParamsSchema, idSchema, stripUnknownFields } from "./common.validatio
 export const checkInSchema = stripUnknownFields(Joi.object({
   clientId: idSchema.required(),
   courseId: idSchema.required(),
+  // Owner only: the trainer who took the class. Trainers are always recorded as themselves.
+  trainerId: idSchema.allow(null),
   override: Joi.boolean(),
   reason: Joi.string().trim().min(1).max(500).when("override", {
     is: true,

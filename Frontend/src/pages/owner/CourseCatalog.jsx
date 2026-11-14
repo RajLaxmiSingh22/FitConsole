@@ -1,8 +1,25 @@
 import { useState } from "react";
-import { Button, Card, EmptyState, Field, Notice, PageHeader, StatusPill } from "../../components/ui/index.js";
+import { Avatar, Button, Card, EmptyState, Field, Notice, PageHeader } from "../../components/ui/index.js";
+import { courseCover } from "../../constants/media.js";
+import CourseEditPanel from "./CourseEditPanel.jsx";
 import { durations } from "../../constants/memberships.js";
 import { apiCalls, getApiError } from "../../services/api.js";
 import { currency } from "../../utils/format.js";
+
+// Per-field price problems: each price > 0, and no longer plan cheaper than the one before it.
+function planErrors(values) {
+  const errors = {};
+  let previous = null;
+  for (const { months, label } of durations) {
+    const raw = values[months];
+    if (raw === "" || raw == null) continue;
+    const price = Number(raw);
+    if (!Number.isFinite(price) || price <= 0) { errors[months] = "Must be greater than 0."; continue; }
+    if (previous && price < previous.price) errors[months] = `Must be at least the ${previous.label} price.`;
+    previous = { price, label };
+  }
+  return errors;
+}
 
 export default function CourseCatalog({ courses, trainers, refresh }) {
   const [showForm, setShowForm] = useState(false);
@@ -11,14 +28,20 @@ export default function CourseCatalog({ courses, trainers, refresh }) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("combat");
   const [description, setDescription] = useState("");
-  const [prices, setPrices] = useState({ 1: "", 3: "", 6: "", 12: "" });
-  const [trainerSelection, setTrainerSelection] = useState({});
+  const emptyPrices = () => Object.fromEntries(durations.map(({ months }) => [months, ""]));
+  const [prices, setPrices] = useState(emptyPrices);
+  const [priceErrors, setPriceErrors] = useState({});
+  const [editing, setEditing] = useState(null);
   const [editingPrices, setEditingPrices] = useState("");
   const [coursePrices, setCoursePrices] = useState({});
   const [pricingError, setPricingError] = useState("");
   const [savingPrices, setSavingPrices] = useState(false);
   async function createCourse(event) {
     event.preventDefault();
+    if (saving) return;
+    const fieldErrors = planErrors(prices);
+    setPriceErrors(fieldErrors);
+    if (Object.keys(fieldErrors).length) return;
     setSaving(true);
     setError("");
     try {
@@ -26,23 +49,13 @@ export default function CourseCatalog({ courses, trainers, refresh }) {
       await apiCalls.courses.create({ name, category, description, plans });
       setShowForm(false);
       setName("");
-      setPrices({ 1: "", 3: "", 6: "", 12: "" });
+      setDescription("");
+      setPrices(emptyPrices());
       refresh();
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to create course."));
     } finally {
       setSaving(false);
-    }
-  }
-  async function toggleTrainer(course, trainerUserId, checked) {
-    const oldIds = trainerSelection[course.id] ?? course.Trainers?.map((item) => item.userId) ?? [];
-    const next = checked ? [...oldIds, trainerUserId] : oldIds.filter((id) => id !== trainerUserId);
-    setTrainerSelection({ ...trainerSelection, [course.id]: next });
-    try {
-      await apiCalls.courses.setTrainers(course.id, next);
-    } catch (requestError) {
-      setError(getApiError(requestError, "Unable to update teaching trainers."));
-      setTrainerSelection({ ...trainerSelection, [course.id]: oldIds });
     }
   }
   async function deactivate(course) {
@@ -57,6 +70,7 @@ export default function CourseCatalog({ courses, trainers, refresh }) {
   function startPriceEdit(course) {
     setPricingError("");
     setEditingPrices(course.id);
+    setPriceErrors({});
     setCoursePrices(Object.fromEntries(durations.map(({ months }) => [
       months,
       course.CoursePlans?.find((plan) => Number(plan.durationMonths) === months)?.price ?? "",
@@ -66,10 +80,10 @@ export default function CourseCatalog({ courses, trainers, refresh }) {
     const plans = durations
       .filter(({ months }) => coursePrices[months] !== "")
       .map(({ months }) => ({ durationMonths: months, price: Number(coursePrices[months]) }));
-    if (!plans.length || plans.some((plan) => !Number.isFinite(plan.price) || plan.price <= 0)) {
-      setPricingError("Enter a price greater than zero for at least one duration.");
-      return;
-    }
+    const fieldErrors = planErrors(coursePrices);
+    setPriceErrors(fieldErrors);
+    if (!plans.length) { setPricingError("Enter a price for at least one duration."); return; }
+    if (Object.keys(fieldErrors).length) { setPricingError(""); return; }
     setSavingPrices(true);
     setPricingError("");
     try {
@@ -91,22 +105,42 @@ export default function CourseCatalog({ courses, trainers, refresh }) {
         <Field label="Course name *"><input required value={name} onChange={(event) => setName(event.target.value)} /></Field>
         <Field label="Category *"><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="combat">Combat</option><option value="strength">Strength</option><option value="conditioning">Conditioning</option><option value="wellness">Wellness</option><option value="combo">Combo</option></select></Field>
         <Field label="Description"><input value={description} onChange={(event) => setDescription(event.target.value)} /></Field>
-        {durations.map(({ months, label }) => <Field label={`${label} price (₹)${months === 1 ? " *" : ""}`} key={months}><input type="number" min="1" step="0.01" required={months === 1} value={prices[months]} onChange={(event) => setPrices({ ...prices, [months]: event.target.value })} /></Field>)}
+        {durations.map(({ months, label }) => <Field label={`${label} price (₹)${months === 1 ? " *" : ""}`} key={months}><input type="number" min="1" step="0.01" required={months === 1} value={prices[months] ?? ""} aria-invalid={Boolean(priceErrors[months])} onChange={(event) => setPrices({ ...prices, [months]: event.target.value })} />{priceErrors[months] && <small className="field-error">{priceErrors[months]}</small>}</Field>)}
         <div className="form-actions"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save course"}</Button></div>
       </form></Card>}
       {courses.length ? <div className="course-grid">{courses.map((course) => {
-        const assigned = trainerSelection[course.id] ?? course.Trainers?.map((trainer) => trainer.userId) ?? [];
-        return <Card key={course.id} className="course-card">
-          <div className="course-top"><StatusPill tone="primary">{course.category}</StatusPill><button className="text-button danger-text" onClick={() => deactivate(course)}>Deactivate</button></div>
-          <h2>{course.name}</h2><p className="muted">{course.description || "Membership program"}</p>
-          <div className="price-grid">{durations.map(({ months, label }) => { const plan = course.CoursePlans?.find((item) => Number(item.durationMonths) === months); return <div key={months}><small>{label}</small><b>{plan ? currency(plan.price) : "—"}</b></div>; })}</div>
-          {editingPrices === course.id ? <div className="form-grid">
-            {durations.map(({ months, label }) => <Field key={months} label={`${label} price (₹)`}><input type="number" min="0.01" step="0.01" value={coursePrices[months] ?? ""} onChange={(event) => setCoursePrices({ ...coursePrices, [months]: event.target.value })} /></Field>)}
-            <div className="form-actions"><Button onClick={() => saveCoursePrices(course)} disabled={savingPrices}>{savingPrices ? "Saving…" : "Publish offers"}</Button><Button variant="outline" onClick={() => setEditingPrices("")}>Cancel</Button></div>
-          </div> : <Button variant="outline" onClick={() => startPriceEdit(course)}>Edit member offers</Button>}
-          <div className="trainer-assignment"><p className="overline">Teaching trainers</p>{trainers.map((trainer) => <label key={trainer.userId}><input type="checkbox" checked={assigned.includes(trainer.userId)} onChange={(event) => toggleTrainer(course, trainer.userId, event.target.checked)} />{trainer.User?.fullName}</label>)}</div>
+        const cover = courseCover(course, 800);
+        const coaches = course.Trainers ?? [];
+        return <Card key={course.id} className="course-card course-card--cover">
+          <div className="course-cover">
+            <img src={cover.src} alt={cover.alt} loading="lazy" />
+            <span className="course-cover-tag">{course.category}</span>
+            {cover.isDefault && <span className="course-cover-default">Default cover</span>}
+            <button type="button" className="course-cover-button" onClick={() => setEditing(course)}>⤒ {cover.isDefault ? "Upload cover" : "Change cover"}</button>
+          </div>
+          <div className="course-card-body">
+            <h2>{course.name}</h2><p className="muted">{course.description || "Membership program"}</p>
+            <div className="price-grid">{durations.map(({ months, label }) => { const plan = course.CoursePlans?.find((item) => Number(item.durationMonths) === months); return <div key={months}><small>{label}</small><b>{plan ? currency(plan.price) : "—"}</b></div>; })}</div>
+            {editingPrices === course.id ? <div className="form-grid">
+              {durations.map(({ months, label }) => <Field key={months} label={`${label} price (₹)`}><input type="number" min="0.01" step="0.01" value={coursePrices[months] ?? ""} aria-invalid={Boolean(priceErrors[months])} onChange={(event) => setCoursePrices({ ...coursePrices, [months]: event.target.value })} />{priceErrors[months] && <small className="field-error">{priceErrors[months]}</small>}</Field>)}
+              <div className="form-actions"><Button onClick={() => saveCoursePrices(course)} disabled={savingPrices}>{savingPrices ? "Saving…" : "Publish offers"}</Button><Button variant="outline" onClick={() => setEditingPrices("")}>Cancel</Button></div>
+            </div> : null}
+            <div className="course-card-foot">
+              <div className="avatar-stack" aria-label={coaches.length ? `Coaches: ${coaches.map((trainer) => trainer.User?.fullName).join(", ")}` : "No coaches assigned"}>
+                {coaches.slice(0, 4).map((trainer) => <Avatar key={trainer.userId} userId={trainer.userId} name={trainer.User?.fullName ?? "?"} className="avatar avatar--stack" />)}
+                {coaches.length > 4 && <span className="avatar avatar--stack avatar-more">+{coaches.length - 4}</span>}
+                {!coaches.length && <small className="muted">No coaches yet</small>}
+              </div>
+              <div className="course-card-actions">
+                {editingPrices !== course.id && <Button variant="ghost" onClick={() => startPriceEdit(course)}>Edit prices</Button>}
+                <Button variant="outline" onClick={() => setEditing(course)}>Edit course</Button>
+              </div>
+            </div>
+            <button className="text-button danger-text course-deactivate" onClick={() => deactivate(course)}>Deactivate course</button>
+          </div>
         </Card>;
       })}</div> : <EmptyState title="No courses yet" detail="Add courses and membership prices to start enrolling members." />}
+      {editing && <CourseEditPanel course={editing} trainers={trainers} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); refresh(); }} />}
     </>
   );
 }

@@ -138,7 +138,7 @@ export default function WebsiteLeads() {
           <Button variant="outline" disabled={busy || !(courseId || selectedLead?.courseId)} onClick={assignCourse}>Assign course</Button>
         </div>}
         {selectedLead?.status === "trial_attended" && <div className="website-enrollment">
-          <Field label="Membership duration"><select value={durationMonths} onChange={(event) => setDurationMonths(Number(event.target.value))}>{[1, 3, 6, 12].map((months) => <option key={months} value={months}>{months} months</option>)}</select></Field>
+          <Field label="Membership duration"><select value={durationMonths} onChange={(event) => setDurationMonths(Number(event.target.value))}>{[1, 2, 3, 6, 12].map((months) => <option key={months} value={months}>{months} {months === 1 ? "month" : "months"}</option>)}</select></Field>
           <Button disabled={busy || !selectedLead?.courseId} onClick={enrollLead}>Enroll existing member</Button>
           <small>Requires an existing member account matching this lead's phone or email. Enrollment does not record payment.</small>
         </div>}

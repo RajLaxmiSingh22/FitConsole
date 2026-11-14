@@ -1,7 +1,11 @@
--- FitConsole schema baseline (2026-10-29).
--- Replaces the 13 migrations from 202610270001 to 202610280007, which are folded into this file.
--- New databases run this file; databases that already applied all 13 old migrations skip it (see runMigrations.js).
--- Generated with pg_dump --schema-only from a database built by those migrations; edit future changes as new files.
+-- FitConsole schema baseline (2026-11-14).
+-- The complete schema in one file: enums, sequences, tables, constraints and indexes. It replaces every
+-- earlier migration (202610290000_baseline.sql through 202611140002_course_covers.sql, and the interim
+-- 202611140003_schema_baseline.sql). Generated with pg_dump --schema-only --no-owner --no-privileges
+-- from a database built by those files, and proven identical by diffing both schemas.
+-- No data lives here: demo data is loaded by `npm run seed:demo` and `npm run seed:demo-gym`.
+-- New databases run this file. Databases that already applied the old files only record it
+-- (see LEGACY_MIGRATIONS in src/runMigrations.js). Put future changes in new, later-dated files.
 
 CREATE TYPE public.enum_cashfree_orders_status AS ENUM (
     'pending',
@@ -45,6 +49,7 @@ CREATE TYPE public.enum_users_role AS ENUM (
     'client'
 );
 
+-- analytics_events: Website analytics events, stored only after visitor consent (no IP addresses or fingerprints).
 CREATE TABLE public.analytics_events (
     id uuid NOT NULL,
     event_id uuid NOT NULL,
@@ -59,9 +64,10 @@ CREATE TABLE public.analytics_events (
     lead_id uuid,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    CONSTRAINT analytics_events_type_check CHECK (((type)::text = ANY ((ARRAY['page_view'::character varying, 'form_start'::character varying, 'form_submit'::character varying, 'trial_booking'::character varying, 'trial_attendance'::character varying, 'enrollment'::character varying])::text[])))
+    CONSTRAINT analytics_events_type_check CHECK (((type)::text = ANY (ARRAY[('page_view'::character varying)::text, ('form_start'::character varying)::text, ('form_submit'::character varying)::text, ('trial_booking'::character varying)::text, ('trial_attendance'::character varying)::text, ('enrollment'::character varying)::text])))
 );
 
+-- attendance: Member check-ins per day, recorded by the owner or a trainer.
 CREATE TABLE public.attendance (
     id uuid NOT NULL,
     member_id uuid NOT NULL,
@@ -72,9 +78,11 @@ CREATE TABLE public.attendance (
     override boolean DEFAULT false NOT NULL,
     override_reason text,
     created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL
+    updated_at timestamp with time zone NOT NULL,
+    checked_out_at timestamp with time zone
 );
 
+-- cashfree_orders: Online checkout orders with Cashfree; the provider's confirmation is authoritative.
 CREATE TABLE public.cashfree_orders (
     id uuid NOT NULL,
     cashfree_order_id character varying(50) NOT NULL,
@@ -91,6 +99,23 @@ CREATE TABLE public.cashfree_orders (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- class_sessions: Owner-managed weekly class timetable.
+CREATE TABLE public.class_sessions (
+    id uuid NOT NULL,
+    course_id uuid NOT NULL,
+    trainer_id uuid,
+    weekday smallint NOT NULL,
+    start_time time without time zone NOT NULL,
+    end_time time without time zone NOT NULL,
+    level character varying(40),
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT class_sessions_time_order_check CHECK ((end_time > start_time)),
+    CONSTRAINT class_sessions_weekday_check CHECK (((weekday >= 1) AND (weekday <= 7)))
+);
+
+-- clients: Member profiles: contact, health and fitness details, assigned trainer and training days.
 CREATE TABLE public.clients (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -113,21 +138,31 @@ CREATE TABLE public.clients (
     joined_at date NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    CONSTRAINT clients_diet_preference_check CHECK (((diet_preference IS NULL) OR ((diet_preference)::text = ANY ((ARRAY['veg'::character varying, 'non_veg'::character varying, 'eggetarian'::character varying, 'vegan'::character varying])::text[])))),
-    CONSTRAINT clients_goal_category_check CHECK (((goal_category IS NULL) OR ((goal_category)::text = ANY ((ARRAY['fat_loss'::character varying, 'muscle_gain'::character varying, 'maintain'::character varying])::text[]))))
+    training_days smallint[],
+    guardian_name character varying(255),
+    target_weight_kg numeric(5,2),
+    diet_restrictions jsonb,
+    workout_profile jsonb,
+    CONSTRAINT clients_diet_preference_check CHECK (((diet_preference IS NULL) OR ((diet_preference)::text = ANY (ARRAY[('veg'::character varying)::text, ('non_veg'::character varying)::text, ('eggetarian'::character varying)::text, ('vegan'::character varying)::text])))),
+    CONSTRAINT clients_goal_category_check CHECK (((goal_category IS NULL) OR ((goal_category)::text = ANY (ARRAY[('fat_loss'::character varying)::text, ('muscle_gain'::character varying)::text, ('maintain'::character varying)::text])))),
+    CONSTRAINT clients_target_weight_kg_check CHECK (((target_weight_kg IS NULL) OR (target_weight_kg > (0)::numeric))),
+    CONSTRAINT clients_training_days_check CHECK (((training_days IS NULL) OR ((training_days <@ ARRAY[(1)::smallint, (2)::smallint, (3)::smallint, (4)::smallint, (5)::smallint, (6)::smallint, (7)::smallint]) AND ((cardinality(training_days) >= 1) AND (cardinality(training_days) <= 7)))))
 );
 
+-- conversation_participants: Who belongs to each message conversation.
 CREATE TABLE public.conversation_participants (
     conversation_id uuid NOT NULL,
     user_id uuid NOT NULL
 );
 
+-- conversations: Message threads between members and coaches.
 CREATE TABLE public.conversations (
     id uuid NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL
 );
 
+-- course_plans: Membership prices per course and duration (1, 2, 3, 6 or 12 months).
 CREATE TABLE public.course_plans (
     id uuid NOT NULL,
     course_id uuid NOT NULL,
@@ -137,6 +172,7 @@ CREATE TABLE public.course_plans (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- courses: Programs offered by the gym, with level, age limits and cover image.
 CREATE TABLE public.courses (
     id uuid NOT NULL,
     name character varying(255) NOT NULL,
@@ -145,9 +181,21 @@ CREATE TABLE public.courses (
     monthly_price numeric(10,2) NOT NULL,
     active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL
+    updated_at timestamp with time zone NOT NULL,
+    min_age smallint,
+    max_age smallint,
+    level character varying(20),
+    cover_image_url text,
+    cover_image_public_id character varying(255),
+    cover_image_alt character varying(200),
+    cover_default character varying(20),
+    CONSTRAINT courses_cover_default_check CHECK (((cover_default IS NULL) OR (cover_default IN ('combat', 'conditioning', 'kids', 'strength')))),
+    CONSTRAINT courses_level_check CHECK (((level IS NULL) OR (level IN ('beginner', 'intermediate', 'advanced', 'all_levels')))),
+    CONSTRAINT courses_max_age_check CHECK (((max_age IS NULL) OR ((max_age >= 3) AND (max_age <= 100)))),
+    CONSTRAINT courses_min_age_check CHECK (((min_age IS NULL) OR ((min_age >= 3) AND (min_age <= 100))))
 );
 
+-- diet_plan_reviews: Trainer reviews (approve/reject) of AI-drafted diet plans.
 CREATE TABLE public.diet_plan_reviews (
     diet_plan_id uuid NOT NULL,
     reviewed_by uuid NOT NULL,
@@ -155,6 +203,7 @@ CREATE TABLE public.diet_plan_reviews (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- diet_plans: Diet plans per member: AI drafts and trainer-approved versions.
 CREATE TABLE public.diet_plans (
     id uuid NOT NULL,
     member_id uuid NOT NULL,
@@ -167,6 +216,7 @@ CREATE TABLE public.diet_plans (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- diet_tracker: Daily diet check-ins logged by members.
 CREATE TABLE public.diet_tracker (
     id uuid NOT NULL,
     client_id uuid NOT NULL,
@@ -184,6 +234,7 @@ CREATE TABLE public.diet_tracker (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- diet_tracker_authors: Who logged each diet check-in.
 CREATE TABLE public.diet_tracker_authors (
     diet_tracker_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -191,6 +242,37 @@ CREATE TABLE public.diet_tracker_authors (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- email_log: Sent emails (password reset, welcome, sign-in alerts, reminders) for de-duplication and audit.
+CREATE TABLE public.email_log (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    kind character varying(40) NOT NULL,
+    reference_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL
+);
+
+-- gallery_items: Owner-managed gallery photos and videos stored in Cloudinary.
+CREATE TABLE public.gallery_items (
+    id uuid NOT NULL,
+    media_type character varying(10) NOT NULL,
+    title character varying(80) NOT NULL,
+    caption character varying(160),
+    public_id character varying(255) NOT NULL,
+    url text NOT NULL,
+    poster_url text,
+    width integer,
+    height integer,
+    bytes integer,
+    sort_order integer DEFAULT 0 NOT NULL,
+    is_published boolean DEFAULT true NOT NULL,
+    uploaded_by uuid,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT gallery_items_media_type_check CHECK ((media_type IN ('image', 'video')))
+);
+
+-- lead_activities: History of status changes and notes on website leads.
 CREATE TABLE public.lead_activities (
     id uuid NOT NULL,
     lead_id uuid NOT NULL,
@@ -201,9 +283,10 @@ CREATE TABLE public.lead_activities (
     new_status character varying(32),
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    CONSTRAINT lead_activities_type_check CHECK (((type)::text = ANY ((ARRAY['note'::character varying, 'status_change'::character varying, 'trial_attendance'::character varying, 'enrollment'::character varying])::text[])))
+    CONSTRAINT lead_activities_type_check CHECK (((type)::text = ANY (ARRAY[('note'::character varying)::text, ('status_change'::character varying)::text, ('trial_attendance'::character varying)::text, ('enrollment'::character varying)::text])))
 );
 
+-- members: Member account details linked to a user.
 CREATE TABLE public.members (
     user_id uuid NOT NULL,
     phone character varying(255),
@@ -213,6 +296,7 @@ CREATE TABLE public.members (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- memberships: A member's membership periods, amounts and status.
 CREATE TABLE public.memberships (
     id uuid NOT NULL,
     member_id uuid NOT NULL,
@@ -225,6 +309,7 @@ CREATE TABLE public.memberships (
     course_id uuid NOT NULL
 );
 
+-- messages: Messages within conversations.
 CREATE TABLE public.messages (
     id uuid NOT NULL,
     conversation_id uuid NOT NULL,
@@ -235,6 +320,7 @@ CREATE TABLE public.messages (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- password_reset_tokens: Single-use password reset tokens (stored hashed).
 CREATE TABLE public.password_reset_tokens (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -245,6 +331,7 @@ CREATE TABLE public.password_reset_tokens (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- payment_audit: Audit trail of payment changes and voids.
 CREATE TABLE public.payment_audit (
     id uuid NOT NULL,
     payment_id uuid NOT NULL,
@@ -255,6 +342,7 @@ CREATE TABLE public.payment_audit (
     created_at timestamp with time zone NOT NULL
 );
 
+-- payment_details: Provider details for online payments.
 CREATE TABLE public.payment_details (
     payment_id uuid NOT NULL,
     client_id uuid NOT NULL,
@@ -264,6 +352,7 @@ CREATE TABLE public.payment_details (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- payments: Recorded payments (cash, UPI, card, online) against memberships.
 CREATE TABLE public.payments (
     id uuid NOT NULL,
     membership_id uuid,
@@ -288,6 +377,7 @@ CREATE SEQUENCE public.payment_invoice_number_seq
 
 ALTER SEQUENCE public.payment_invoice_number_seq OWNED BY public.payments.invoice_number;
 
+-- progress_entries: Weight and body measurements over time.
 CREATE TABLE public.progress_entries (
     id uuid NOT NULL,
     client_id uuid NOT NULL,
@@ -297,9 +387,20 @@ CREATE TABLE public.progress_entries (
     recorded_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    CONSTRAINT progress_entries_stamina_check CHECK (((stamina IS NULL) OR ((stamina >= 1) AND (stamina <= 10))))
+    waist_cm numeric(5,1),
+    chest_cm numeric(5,1),
+    arm_cm numeric(5,1),
+    hips_cm numeric(5,1),
+    approximate_date boolean DEFAULT false NOT NULL,
+    context text,
+    CONSTRAINT progress_entries_arm_cm_check CHECK (((arm_cm IS NULL) OR (arm_cm > (0)::numeric))),
+    CONSTRAINT progress_entries_chest_cm_check CHECK (((chest_cm IS NULL) OR (chest_cm > (0)::numeric))),
+    CONSTRAINT progress_entries_hips_cm_check CHECK (((hips_cm IS NULL) OR (hips_cm > (0)::numeric))),
+    CONSTRAINT progress_entries_stamina_check CHECK (((stamina IS NULL) OR ((stamina >= 1) AND (stamina <= 10)))),
+    CONSTRAINT progress_entries_waist_cm_check CHECK (((waist_cm IS NULL) OR (waist_cm > (0)::numeric)))
 );
 
+-- refresh_tokens: Session refresh tokens (stored hashed) for cookie sessions.
 CREATE TABLE public.refresh_tokens (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -311,6 +412,7 @@ CREATE TABLE public.refresh_tokens (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- reminder_log: Payment and membership reminders that were sent or resolved.
 CREATE TABLE public.reminder_log (
     id uuid NOT NULL,
     payment_id uuid NOT NULL,
@@ -322,6 +424,7 @@ CREATE TABLE public.reminder_log (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- trainer_courses: Which trainers teach which courses.
 CREATE TABLE public.trainer_courses (
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
@@ -329,14 +432,32 @@ CREATE TABLE public.trainer_courses (
     course_id uuid NOT NULL
 );
 
+-- trainer_details: Public coach profile: bio, experience, achievements and specialties.
 CREATE TABLE public.trainer_details (
     user_id uuid NOT NULL,
     experience_years numeric(4,1),
     details jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL
+    updated_at timestamp with time zone NOT NULL,
+    bio text,
+    achievements jsonb DEFAULT '[]'::jsonb NOT NULL,
+    specialties jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
+-- trainer_notes: Trainer notes and recommendations on a member.
+CREATE TABLE public.trainer_notes (
+    id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    author_id uuid,
+    kind character varying(20) NOT NULL,
+    body text NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT trainer_notes_body_check CHECK ((length(btrim(body)) > 0)),
+    CONSTRAINT trainer_notes_kind_check CHECK ((kind IN ('note', 'recommendation')))
+);
+
+-- trainers: Users who coach (trainers, and owners who also coach).
 CREATE TABLE public.trainers (
     user_id uuid NOT NULL,
     id uuid NOT NULL,
@@ -346,6 +467,20 @@ CREATE TABLE public.trainers (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- user_avatars: Profile photos: Cloudinary URL and asset id, or the image bytes when Cloudinary is off.
+CREATE TABLE public.user_avatars (
+    user_id uuid NOT NULL,
+    mime_type character varying(20) NOT NULL,
+    data bytea,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    url text,
+    public_id character varying(255),
+    CONSTRAINT user_avatars_mime_type_check CHECK ((mime_type IN ('image/jpeg', 'image/png', 'image/webp'))),
+    CONSTRAINT user_avatars_storage_check CHECK (((data IS NOT NULL) OR ((url IS NOT NULL) AND (public_id IS NOT NULL))))
+);
+
+-- user_statuses: Account active/inactive status.
 CREATE TABLE public.user_statuses (
     user_id uuid NOT NULL,
     active boolean DEFAULT true NOT NULL,
@@ -353,6 +488,7 @@ CREATE TABLE public.user_statuses (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- users: All accounts (owner, trainer, client) with Argon2 password hashes.
 CREATE TABLE public.users (
     id uuid NOT NULL,
     full_name character varying(255) NOT NULL,
@@ -364,6 +500,7 @@ CREATE TABLE public.users (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- waiver_acceptances: Members' acceptance of each version of the gym agreement.
 CREATE TABLE public.waiver_acceptances (
     id uuid NOT NULL,
     client_id uuid NOT NULL,
@@ -374,6 +511,7 @@ CREATE TABLE public.waiver_acceptances (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- waiver_audits: Audit trail of agreement acceptances.
 CREATE TABLE public.waiver_audits (
     waiver_acceptance_id uuid NOT NULL,
     ip_address character varying(255),
@@ -381,6 +519,18 @@ CREATE TABLE public.waiver_audits (
     updated_at timestamp with time zone NOT NULL
 );
 
+-- waiver_documents: Versions of the gym agreement text.
+CREATE TABLE public.waiver_documents (
+    id uuid NOT NULL,
+    version character varying(32) NOT NULL,
+    text text NOT NULL,
+    published_by uuid,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    CONSTRAINT waiver_documents_text_check CHECK ((length(btrim(text)) > 0))
+);
+
+-- website_leads: Trial-class bookings and enquiries from the public website.
 CREATE TABLE public.website_leads (
     id uuid NOT NULL,
     name character varying(255) NOT NULL,
@@ -402,7 +552,33 @@ CREATE TABLE public.website_leads (
     client_id uuid,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    CONSTRAINT website_leads_status_check CHECK (((status)::text = ANY ((ARRAY['new'::character varying, 'contacted'::character varying, 'trial_scheduled'::character varying, 'trial_confirmed'::character varying, 'trial_attended'::character varying, 'no_show'::character varying, 'enrolled'::character varying, 'lost'::character varying])::text[])))
+    CONSTRAINT website_leads_status_check CHECK (((status)::text = ANY (ARRAY[('new'::character varying)::text, ('contacted'::character varying)::text, ('trial_scheduled'::character varying)::text, ('trial_confirmed'::character varying)::text, ('trial_attended'::character varying)::text, ('no_show'::character varying)::text, ('enrolled'::character varying)::text, ('lost'::character varying)::text])))
+);
+
+-- wellness_checkins: Members' sleep, mood and energy check-ins.
+CREATE TABLE public.wellness_checkins (
+    id uuid NOT NULL,
+    client_id uuid NOT NULL,
+    recorded_on date NOT NULL,
+    mood character varying(10) NOT NULL,
+    energy smallint NOT NULL,
+    stress smallint NOT NULL,
+    motivation smallint NOT NULL,
+    soreness smallint NOT NULL,
+    sleep_hours numeric(4,1),
+    pain boolean DEFAULT false NOT NULL,
+    problem text,
+    notes text,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL,
+    digestion smallint,
+    CONSTRAINT wellness_checkins_digestion_check CHECK (((digestion IS NULL) OR ((digestion >= 1) AND (digestion <= 5)))),
+    CONSTRAINT wellness_checkins_energy_check CHECK (((energy >= 1) AND (energy <= 5))),
+    CONSTRAINT wellness_checkins_mood_check CHECK ((mood IN ('happy', 'neutral', 'low'))),
+    CONSTRAINT wellness_checkins_motivation_check CHECK (((motivation >= 1) AND (motivation <= 5))),
+    CONSTRAINT wellness_checkins_sleep_hours_check CHECK (((sleep_hours IS NULL) OR ((sleep_hours >= (0)::numeric) AND (sleep_hours <= (24)::numeric)))),
+    CONSTRAINT wellness_checkins_soreness_check CHECK (((soreness >= 1) AND (soreness <= 5))),
+    CONSTRAINT wellness_checkins_stress_check CHECK (((stress >= 1) AND (stress <= 5)))
 );
 
 ALTER TABLE ONLY public.payments ALTER COLUMN invoice_number SET DEFAULT nextval('public.payment_invoice_number_seq'::regclass);
@@ -421,6 +597,9 @@ ALTER TABLE ONLY public.cashfree_orders
 
 ALTER TABLE ONLY public.cashfree_orders
     ADD CONSTRAINT cashfree_orders_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.class_sessions
+    ADD CONSTRAINT class_sessions_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.clients
     ADD CONSTRAINT clients_pkey PRIMARY KEY (id);
@@ -454,6 +633,18 @@ ALTER TABLE ONLY public.diet_tracker_authors
 
 ALTER TABLE ONLY public.diet_tracker
     ADD CONSTRAINT diet_tracker_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.email_log
+    ADD CONSTRAINT email_log_kind_reference_unique UNIQUE (kind, reference_id);
+
+ALTER TABLE ONLY public.email_log
+    ADD CONSTRAINT email_log_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.gallery_items
+    ADD CONSTRAINT gallery_items_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.gallery_items
+    ADD CONSTRAINT gallery_items_public_id_key UNIQUE (public_id);
 
 ALTER TABLE ONLY public.lead_activities
     ADD CONSTRAINT lead_activities_pkey PRIMARY KEY (id);
@@ -500,11 +691,17 @@ ALTER TABLE ONLY public.trainer_courses
 ALTER TABLE ONLY public.trainer_details
     ADD CONSTRAINT trainer_details_pkey PRIMARY KEY (user_id);
 
+ALTER TABLE ONLY public.trainer_notes
+    ADD CONSTRAINT trainer_notes_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.trainers
     ADD CONSTRAINT trainers_id_key UNIQUE (id);
 
 ALTER TABLE ONLY public.trainers
     ADD CONSTRAINT trainers_pkey PRIMARY KEY (user_id);
+
+ALTER TABLE ONLY public.user_avatars
+    ADD CONSTRAINT user_avatars_pkey PRIMARY KEY (user_id);
 
 ALTER TABLE ONLY public.user_statuses
     ADD CONSTRAINT user_statuses_pkey PRIMARY KEY (user_id);
@@ -521,8 +718,20 @@ ALTER TABLE ONLY public.waiver_acceptances
 ALTER TABLE ONLY public.waiver_audits
     ADD CONSTRAINT waiver_audits_pkey PRIMARY KEY (waiver_acceptance_id);
 
+ALTER TABLE ONLY public.waiver_documents
+    ADD CONSTRAINT waiver_documents_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.waiver_documents
+    ADD CONSTRAINT waiver_documents_version_key UNIQUE (version);
+
 ALTER TABLE ONLY public.website_leads
     ADD CONSTRAINT website_leads_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.wellness_checkins
+    ADD CONSTRAINT wellness_checkins_client_day_unique UNIQUE (client_id, recorded_on);
+
+ALTER TABLE ONLY public.wellness_checkins
+    ADD CONSTRAINT wellness_checkins_pkey PRIMARY KEY (id);
 
 CREATE INDEX analytics_events_session_created_at_idx ON public.analytics_events USING btree (session_id, created_at);
 
@@ -538,6 +747,8 @@ CREATE INDEX analytics_events_visitor_id_created_at ON public.analytics_events U
 
 CREATE INDEX attendance_attended_at_idx ON public.attendance USING btree (attended_at);
 
+CREATE INDEX attendance_attended_on_idx ON public.attendance USING btree (attended_on);
+
 CREATE INDEX attendance_member_attended_at_idx ON public.attendance USING btree (member_id, attended_at);
 
 CREATE UNIQUE INDEX attendance_member_course_day_unique_idx ON public.attendance USING btree (member_id, course_id, attended_on) WHERE (attended_on IS NOT NULL);
@@ -546,9 +757,17 @@ CREATE INDEX attendance_trainer_attended_at_idx ON public.attendance USING btree
 
 CREATE INDEX cashfree_orders_membership_status_expiry_idx ON public.cashfree_orders USING btree (membership_id, status, expires_at);
 
+CREATE INDEX class_sessions_trainer_idx ON public.class_sessions USING btree (trainer_id);
+
+CREATE INDEX class_sessions_weekday_start_idx ON public.class_sessions USING btree (weekday, start_time);
+
 CREATE UNIQUE INDEX course_plans_course_id_duration_months ON public.course_plans USING btree (course_id, duration_months);
 
 CREATE INDEX diet_tracker_client_id_recorded_on ON public.diet_tracker USING btree (client_id, recorded_on);
+
+CREATE INDEX email_log_user_created_at_idx ON public.email_log USING btree (user_id, created_at);
+
+CREATE INDEX gallery_items_published_order ON public.gallery_items USING btree (is_published, sort_order, created_at);
 
 CREATE INDEX lead_activities_lead_created_at_idx ON public.lead_activities USING btree (lead_id, created_at);
 
@@ -578,7 +797,11 @@ CREATE INDEX refresh_tokens_user_active_idx ON public.refresh_tokens USING btree
 
 CREATE INDEX reminder_log_client_created_at_idx ON public.reminder_log USING btree (client_id, created_at);
 
+CREATE INDEX trainer_notes_client_created_idx ON public.trainer_notes USING btree (client_id, created_at);
+
 CREATE UNIQUE INDEX waiver_acceptances_client_id_agreement_version ON public.waiver_acceptances USING btree (client_id, agreement_version);
+
+CREATE INDEX waiver_documents_created_at_idx ON public.waiver_documents USING btree (created_at);
 
 CREATE INDEX website_leads_course_created_at_idx ON public.website_leads USING btree (course_id, created_at);
 
@@ -603,6 +826,12 @@ ALTER TABLE ONLY public.attendance
 
 ALTER TABLE ONLY public.attendance
     ADD CONSTRAINT attendance_trainer_id_fkey FOREIGN KEY (trainer_id) REFERENCES public.trainers(user_id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.class_sessions
+    ADD CONSTRAINT class_sessions_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.class_sessions
+    ADD CONSTRAINT class_sessions_trainer_id_fkey FOREIGN KEY (trainer_id) REFERENCES public.trainers(user_id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.clients
     ADD CONSTRAINT clients_trainer_id_fkey FOREIGN KEY (trainer_id) REFERENCES public.trainers(id) ON UPDATE CASCADE ON DELETE CASCADE;
@@ -639,6 +868,12 @@ ALTER TABLE ONLY public.diet_tracker_authors
 
 ALTER TABLE ONLY public.diet_tracker
     ADD CONSTRAINT diet_tracker_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.email_log
+    ADD CONSTRAINT email_log_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.gallery_items
+    ADD CONSTRAINT gallery_items_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.lead_activities
     ADD CONSTRAINT lead_activities_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES public.website_leads(id) ON UPDATE CASCADE ON DELETE CASCADE;
@@ -691,8 +926,17 @@ ALTER TABLE ONLY public.trainer_courses
 ALTER TABLE ONLY public.trainer_details
     ADD CONSTRAINT trainer_details_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.trainers(user_id) ON UPDATE CASCADE ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.trainer_notes
+    ADD CONSTRAINT trainer_notes_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.trainer_notes
+    ADD CONSTRAINT trainer_notes_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY public.trainers
     ADD CONSTRAINT trainers_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.user_avatars
+    ADD CONSTRAINT user_avatars_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.user_statuses
     ADD CONSTRAINT user_statuses_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE CASCADE;
@@ -703,8 +947,14 @@ ALTER TABLE ONLY public.waiver_acceptances
 ALTER TABLE ONLY public.waiver_audits
     ADD CONSTRAINT waiver_audits_waiver_acceptance_id_fkey FOREIGN KEY (waiver_acceptance_id) REFERENCES public.waiver_acceptances(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.waiver_documents
+    ADD CONSTRAINT waiver_documents_published_by_fkey FOREIGN KEY (published_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
 ALTER TABLE ONLY public.website_leads
     ADD CONSTRAINT website_leads_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.website_leads
     ADD CONSTRAINT website_leads_course_id_fkey FOREIGN KEY (course_id) REFERENCES public.courses(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.wellness_checkins
+    ADD CONSTRAINT wellness_checkins_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id) ON DELETE CASCADE;

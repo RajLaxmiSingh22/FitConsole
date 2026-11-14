@@ -6,3 +6,7 @@ export const acceptWaiverSchema = Joi.object({
 }).default({});
 
 export const waiverClientParamsSchema = idParamsSchema;
+
+export const publishWaiverSchema = Joi.object({
+  text: Joi.string().trim().min(50).max(20000).required(),
+});

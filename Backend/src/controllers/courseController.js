@@ -1,3 +1,5 @@
+import { destroyMediaQuietly, isCloudinaryConfigured, uploadCourseCover } from "../services/cloudinary.js";
+import { detectImageType } from "./profileController.js";
 import { sequelize } from "../database.js";
 import { Course, CoursePlan, Trainer, TrainerDetails, User, UserStatus } from "../models/index.js";
 
@@ -46,6 +48,9 @@ export async function createCourse(req, res) {
         name: value.name,
         category: value.category,
         description: value.description,
+        minAge: value.minAge ?? null,
+        maxAge: value.maxAge ?? null,
+        level: value.level ?? null,
         price: defaultPlan.price,
       }, { transaction });
       await CoursePlan.bulkCreate(value.plans.map((plan) => ({ ...plan, courseId: course.id })), { transaction });
@@ -85,6 +90,56 @@ export async function updateCourse(req, res) {
     }
     console.error("Course update failed:", error);
     return res.status(500).json({ status: "error", message: "Unable to update course." });
+  }
+}
+
+export const COURSE_COVER_MAX_BYTES = 5 * 1024 * 1024;
+export const COURSE_COVER_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+// Checks the declared type against the file's own signature and the size limit.
+export function checkCourseCover(buffer, declaredType) {
+  const declared = declaredType?.split(";")[0].trim().toLowerCase();
+  if (!COURSE_COVER_TYPES.includes(declared) || detectImageType(buffer) !== declared) {
+    return { status: 400, message: "Upload a JPEG, PNG or WebP image." };
+  }
+  if (buffer.length > COURSE_COVER_MAX_BYTES) return { status: 413, message: "Image is too large (5 MB maximum)." };
+  return null;
+}
+
+export async function uploadCourseCoverImage(req, res) {
+  if (!isCloudinaryConfigured()) {
+    return res.status(503).json({ status: "error", message: "Media storage (Cloudinary) is not configured on the server." });
+  }
+  const problem = checkCourseCover(req.body, req.headers["content-type"]);
+  if (problem) return res.status(problem.status).json({ status: "error", message: problem.message });
+  let uploaded;
+  try {
+    const course = await Course.findByPk(req.validated.params.id);
+    if (!course) return res.status(404).json({ status: "error", message: "Course not found." });
+    const previous = course.coverImagePublicId;
+    uploaded = await uploadCourseCover({ buffer: req.body, mimeType: req.headers["content-type"].split(";")[0].trim(), courseId: course.id });
+    const alt = req.validated.query.alt;
+    await course.update({ coverImageUrl: uploaded.url, coverImagePublicId: uploaded.publicId, ...(alt !== undefined ? { coverImageAlt: alt || null } : {}) });
+    if (previous) destroyMediaQuietly(previous);
+    return res.json({ status: "success", data: course });
+  } catch (error) {
+    console.error("Course cover upload failed:", error);
+    if (uploaded) destroyMediaQuietly(uploaded.publicId);
+    return res.status(502).json({ status: "error", message: "Unable to upload the cover image. Try again." });
+  }
+}
+
+export async function removeCourseCoverImage(req, res) {
+  try {
+    const course = await Course.findByPk(req.validated.params.id);
+    if (!course) return res.status(404).json({ status: "error", message: "Course not found." });
+    const previous = course.coverImagePublicId;
+    await course.update({ coverImageUrl: null, coverImagePublicId: null });
+    if (previous) destroyMediaQuietly(previous);
+    return res.json({ status: "success", data: course });
+  } catch (error) {
+    console.error("Course cover removal failed:", error);
+    return res.status(500).json({ status: "error", message: "Unable to remove the cover image." });
   }
 }
 

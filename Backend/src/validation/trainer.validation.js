@@ -14,6 +14,10 @@ export const trainerProfileSchema = stripUnknownFields(Joi.object({
   gender: Joi.string().max(40).allow("", null),
   experienceYears: Joi.number().min(0).max(999.9).allow(null),
   certification: Joi.string().max(255).allow("", null),
+  // Public profile shown on the website.
+  bio: Joi.string().trim().max(600).allow("", null),
+  achievements: Joi.array().items(Joi.string().trim().min(1).max(140)).max(6),
+  specialties: Joi.array().items(Joi.string().trim().min(1).max(40)).max(6),
 }).min(1));
 
 export const trainerIdParamsSchema = idParamsSchema;

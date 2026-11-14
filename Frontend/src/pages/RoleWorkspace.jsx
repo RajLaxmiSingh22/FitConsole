@@ -1,10 +1,17 @@
-import { useState } from "react";
-import ClientWorkspace from "./client/ClientWorkspace.jsx";
-import OwnerWorkspace from "./owner/OwnerWorkspace.jsx";
-import OwnerWebsiteWorkspace from "./owner/website/OwnerWebsiteWorkspace.jsx";
-import TrainerWorkspace from "./trainer/TrainerWorkspace.jsx";
+import { lazy, Suspense, useState } from "react";
+import { LoadingState } from "../components/ui/index.js";
 
-export default function RoleWorkspace({ user, section, onNavigate }) {
+// Each role's workspace is its own bundle, loaded only after sign-in.
+const ClientWorkspace = lazy(() => import("./client/ClientWorkspace.jsx"));
+const OwnerWorkspace = lazy(() => import("./owner/OwnerWorkspace.jsx"));
+const OwnerWebsiteWorkspace = lazy(() => import("./owner/website/OwnerWebsiteWorkspace.jsx"));
+const TrainerWorkspace = lazy(() => import("./trainer/TrainerWorkspace.jsx"));
+
+export default function RoleWorkspace(props) {
+  return <Suspense fallback={<LoadingState label="Loading your workspace…" />}><Workspace {...props} /></Suspense>;
+}
+
+function Workspace({ user, section, onNavigate }) {
   const [selectedClient, setSelectedClient] = useState(null);
   if (user.role === "owner") {
     return section === "Website Leads" || section === "Website Analytics"

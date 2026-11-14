@@ -29,6 +29,13 @@ export async function checkIn(req, res) {
         return res.status(403).json({ status: "error", message: "You are not assigned to this course." });
       }
     }
+    let trainerId = req.user.role === "trainer" ? req.user.id : null;
+    if (req.user.role === "owner" && value.trainerId) {
+      if (!(await Trainer.findByPk(value.trainerId, { attributes: ["userId"] }))) {
+        return res.status(400).json({ status: "error", message: "Choose an existing trainer." });
+      }
+      trainerId = value.trainerId;
+    }
     if (!(await hasAcceptedCurrentWaiver(client.id))) {
       return res.status(403).json({
         status: "error",
@@ -55,7 +62,7 @@ export async function checkIn(req, res) {
     const attendance = await Attendance.create({
       clientId: client.userId,
       courseId: course.id,
-      trainerId: req.user.role === "trainer" ? req.user.id : null,
+      trainerId,
       attendedOn,
       override: Boolean(value.override),
       overrideReason: value.override ? value.reason : null,
@@ -81,6 +88,7 @@ export async function listAttendance(req, res) {
     const include = [
       { model: Member, include: [{ model: User, attributes: ["id", "fullName"] }] },
       Course,
+      { model: Trainer, attributes: ["userId"], include: [{ model: User, attributes: ["id", "fullName"] }] },
     ];
     if (req.user.role === "trainer") {
       const trainer = await Trainer.findByPk(req.user.id, { attributes: ["id"] });

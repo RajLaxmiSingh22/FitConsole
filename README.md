@@ -15,7 +15,7 @@ The repository contains two independent JavaScript projects: an Express API and 
 - Owner, trainer, and client workspaces in the React application.
 - Responsive public website routes, consent-based first-party analytics, and free-trial booking requests.
 - Owner-only website lead management with activity history, trial status tracking, and eligible lead-to-member conversion.
-- Rate-limited password-reset requests with hashed, expiring, single-use reset tokens and optional Resend email delivery.
+- Rate-limited password-reset requests with hashed, expiring, single-use reset tokens and SMTP email delivery (for example Gmail).
 
 ## Architecture and technology
 
@@ -24,7 +24,7 @@ The repository contains two independent JavaScript projects: an Express API and 
 | Frontend | React, Vite, Cashfree browser SDK |
 | Backend | Node.js, Express, Joi, JWT, Argon2 |
 | Persistence | PostgreSQL, Sequelize |
-| Optional integrations | Cashfree Payments, Google Gemini, Resend email, ExcelJS |
+| Optional integrations | Cashfree Payments, Google Gemini, SMTP email (Nodemailer), ExcelJS |
 
 The API owns authorization, validation, membership pricing, payment order creation, and payment verification. The frontend does not receive Cashfree's server secret. Cashfree payments are recorded from the return-to-app status fetch, the signed webhook, and the daily reconciliation job.
 
@@ -87,7 +87,7 @@ Open <http://localhost:5173>. `VITE_API_URL` should point to the backend API bas
 | `DB_HOST`, `DB_PORT` | PostgreSQL address; defaults are `localhost` and `5432`. |
 | `JWT_SECRET` | Required private signing secret, at least 32 characters. |
 | `FRONTEND_PUBLIC_URL` | Public frontend origin used in password reset links. Production must use HTTPS. |
-| `AUTH_EMAIL_FROM`, `RESEND_API_KEY` | Optional Resend sender and server-side API key; both are required to enable password reset email delivery. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | Optional SMTP email (e.g. Gmail with an App password). Required for password reset; also sends welcome, sign-in alert, password-changed and membership-ending (7 days and 1 day before) emails. Links use `FRONTEND_PUBLIC_URL`. |
 | `OWNER_EMAIL`, `OWNER_PASSWORD` | Required owner bootstrap account; `OWNER_NAME` is optional. |
 | `TRAINER_1_*`, `TRAINER_2_*`, `TRAINER_3_*` | Optional trainer bootstrap names, unique emails, and passwords; configure all three fields for each used slot. |
 | `PORT`, `CORS_ORIGIN` | API port and allowed frontend origin; defaults are `9000` and `http://localhost:5173`. |
@@ -151,7 +151,7 @@ The frontend currently has no test or lint script. Backend tests cover selected 
 
 - The schema is migration-only, starting from the 2026-10-29 baseline. Databases created before the first versioned migration (by `sequelize.sync()` alone) must be upgraded with commit `a59d7ee` before this release. Run migrations against a backup or staging database first.
 - Public endpoint throttling is in-memory and per application process. Use a shared rate-limit store before deploying multiple backend replicas.
-- Password reset email requires verified Resend sender configuration and `FRONTEND_PUBLIC_URL`; reset is unavailable until configured. Do not enable it in production with an unverified sender or HTTP URL.
+- Password reset requires SMTP settings and `FRONTEND_PUBLIC_URL`; reset is unavailable until configured. Do not enable it in production with an HTTP URL. Gmail SMTP has daily sending limits; use a transactional email provider for larger member counts.
 - Lead enrollment requires a member account already registered with the same phone or email. New-account invitation delivery and automated trial scheduling/confirmation are not implemented.
 - The project has no branch, class-schedule, or gym-contact configuration model. Related public pages must disclose unavailable details instead of presenting invented hours, addresses, schedules, or contact information.
 - Consent copy and privacy/legal text require review and approval for the operating jurisdiction before release. Analytics does not store IP addresses or device fingerprints.
@@ -191,6 +191,26 @@ Frontend/
     utils/            Formatting and date helpers
 PROJECT_OVERVIEW.md   Current product scope and limitations
 ```
+
+## Live demo account
+
+The login page has an **Explore Live Demo** button that signs visitors into a shared sample member, "Alex Morgan", with about two months of history: membership, payments, attendance, progress, diet check-ins, an approved diet plan and coach messages.
+
+1. In `Backend/.env` set `DEMO_MODE_ENABLED=true`, `DEMO_CLIENT_EMAIL` (default `demo.client@fitconsole.example.com`) and a long random `DEMO_CLIENT_PASSWORD`. The password stays on the server; the browser only calls `POST /api/auth/demo-login`.
+2. Run `cd Backend && npm run seed:demo`. The seed is idempotent: it rebuilds only the demo account's own records relative to today, so re-run it any time to refresh the dates.
+3. Restart the backend. To turn the demo off, set `DEMO_MODE_ENABLED=false` and restart; the endpoint then returns 404 and the button shows "not available".
+
+The demo account is read-only on the server: every POST, PUT, PATCH and DELETE it sends is refused with `DEMO_READ_ONLY`, so visitors cannot edit data, send messages, change the password or start payments. Its password cannot be reset, it never receives emails, and as a client it cannot reach owner or trainer routes.
+
+## Demo gym data
+
+`cd Backend && npm run seed:demo-gym` builds a complete demo gym for testing every role. Set `DEMO_GYM_PASSWORD` (12+ characters) in `Backend/.env` first; it becomes the sign-in password for all demo coaches and members.
+
+- 5 coaches (Boxing, MMA, Strength & Conditioning, Fitness & Weight Management, Kids) with bios, specialties, achievements and timetable slots.
+- 2 new courses: Boxing Fundamentals (ages 8+) and Kids Martial Arts (ages 6–12), plus 1, 2, 3, 6 and 12-month plans on every course.
+- 25 members, 5 of them under 13 with a guardian. Each has memberships, **cash** payments recorded by the owner, about three months of attendance with check-in and check-out times, weekly progress with measurements, wellness check-ins (adults) and trainer notes.
+
+All demo accounts use `@demo.fitconsole.example.com` addresses, so no real inbox ever receives email. Re-running the seed rebuilds only those accounts' history relative to today; real accounts are never touched. `npm run seed:demo` refreshes the public demo member (Alex Morgan).
 
 ## Security
 

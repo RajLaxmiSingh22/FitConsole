@@ -7,7 +7,10 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "migrate": "node src/migrate.js",
-    "test": "node --test"
+    "seed:demo": "node src/seeds/demoClient.js",
+    "seed:demo-gym": "node src/seeds/demoGym.js",
+    "test": "node --test",
+    "audit:routes": "node scripts/audit-routes.mjs"
   },
   "dependencies": {
     "argon2": "^0.45.1",
@@ -21,12 +24,15 @@
     "joi": "^18.3.0",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^3.0.3",
-    "nodemon": "^3.1.14",
+    "nodemailer": "^6.10.1",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7"
   },
   "overrides": {
     "uuid": "^11.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

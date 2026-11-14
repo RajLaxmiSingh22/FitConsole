@@ -9,7 +9,7 @@ import { sequelize } from "./database.js";
 import { startDailyJob } from "./jobs/daily.js";
 import { runMigrations } from "./runMigrations.js";
 import { getGstRate } from "./utils/gst.js";
-import { assertCurrentWaiverConfigured } from "./utils/waiver.js";
+import { getCurrentWaiver, warnIfWaiverMissing } from "./utils/waiver.js";
 import "./models/index.js";
 
 const port = process.env.PORT ?? 9000;
@@ -20,10 +20,10 @@ process.on("unhandledRejection", (reason) => {
 
 try {
   assertJwtSecret();
-  assertCurrentWaiverConfigured();
   getGstRate();
   await sequelize.authenticate();
   await runMigrations(sequelize);
+  warnIfWaiverMissing(await getCurrentWaiver());
   await ensureOwnerAccount();
   await ensureTrainerAccounts();
   console.log("PostgreSQL connection established and migrations are up to date.");

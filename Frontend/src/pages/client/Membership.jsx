@@ -1,35 +1,50 @@
 import { useState } from "react";
-import { Button, Card, EmptyState, Notice, PageHeader, StatusPill } from "../../components/ui/index.js";
+import { Button, Card, Notice, PageHeader } from "../../components/ui/index.js";
 import { apiCalls, getApiError, responseData } from "../../services/api.js";
 import { openCashfreeCheckout } from "../../services/cashfree.js";
-import { currency, dateLabel } from "../../utils/format.js";
+import { dueAmount, isOpenMembership } from "../../utils/membership.js";
+import { MembershipList, PaymentList } from "./membership/MembershipHistory.jsx";
+import MembershipStatus from "./membership/MembershipStatus.jsx";
+import DemoPaymentModal from "./membership/DemoPaymentModal.jsx";
+import PlanPicker, { takePendingPlan } from "./membership/PlanPicker.jsx";
 
-export default function Membership({ courses, memberships, payments, waiver, waivers, onWaiverAccepted, onRefresh }) {
-  const [accepted, setAccepted] = useState(false);
+export default function Membership({ demo = false, hasPhone = true, courses, memberships, payments, waiver, waivers, onWaiverAccepted, onRefresh }) {
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
   const [checkoutMembershipId, setCheckoutMembershipId] = useState("");
   const [checkoutOfferId, setCheckoutOfferId] = useState("");
   const [acceptance, setAcceptance] = useState(false);
+  // Demo account: Pay opens an explanation (and optional sandbox test) instead of a real checkout.
+  const [demoPayment, setDemoPayment] = useState(null);
+  const [pendingPlan] = useState(() => (demo ? null : takePendingPlan()));
+  // One consent tick covers every Pay button on the page; it is recorded on the first payment.
+  const [agreed, setAgreed] = useState(false);
   const currentVersion = waiver?.version ?? "1";
   const alreadyAccepted = acceptance || waivers.some((item) => item.agreementVersion === String(currentVersion));
-  async function accept() {
-    setSaving(true);
-    setError("");
+  const paymentBusy = Boolean(checkoutOfferId) || Boolean(checkoutMembershipId);
+  // Cashfree needs the member's phone; the server checks this too.
+  const canPay = demo || (hasPhone && (alreadyAccepted || agreed));
+  const lockedReason = !hasPhone ? "Add your phone number in Profile to pay online." : "Tick the agreement box to continue.";
+  const openProfile = () => window.dispatchEvent(new CustomEvent("fitconsole:navigate", { detail: "Profile" }));
+
+  // Records the member's acceptance the first time they pay; returns false if it could not be saved.
+  async function ensureAccepted() {
+    if (alreadyAccepted) return true;
     try {
       await apiCalls.waivers.accept(null);
       setAcceptance(true);
       onWaiverAccepted();
+      return true;
     } catch (requestError) {
-      setError(getApiError(requestError, "Unable to record waiver acceptance."));
-    } finally {
-      setSaving(false);
+      setError(getApiError(requestError, "Unable to record your agreement. Please try again."));
+      return false;
     }
   }
   async function checkout(membershipId) {
+    if (demo) return setDemoPayment({ membershipId });
     setCheckoutMembershipId(membershipId);
     setError("");
     try {
+      if (!(await ensureAccepted())) return;
       const result = responseData(await apiCalls.payments.createCashfreeOrder({ membershipId }));
       await openCashfreeCheckout(result.paymentSessionId);
     } catch (requestError) {
@@ -39,11 +54,13 @@ export default function Membership({ courses, memberships, payments, waiver, wai
     }
   }
   async function checkoutOffer(course, plan) {
+    if (demo) return setDemoPayment({ courseId: course.id, durationMonths: Number(plan.durationMonths), label: `${course.name} · ${plan.durationMonths} month${Number(plan.durationMonths) === 1 ? "" : "s"}` });
     const offerId = `${course.id}-${plan.durationMonths}`;
     setCheckoutOfferId(offerId);
     setError("");
     let membershipCreated = false;
     try {
+      if (!(await ensureAccepted())) return;
       const membership = responseData(await apiCalls.memberships.createClientCheckout({
         courseId: course.id,
         durationMonths: Number(plan.durationMonths),
@@ -55,7 +72,7 @@ export default function Membership({ courses, memberships, payments, waiver, wai
     } catch (requestError) {
       if (membershipCreated) {
         await onRefresh();
-        setError(`${getApiError(requestError, "Unable to start Cashfree checkout.")} Your membership is saved; use its payment button below to try again.`);
+        setError(`${getApiError(requestError, "Unable to start Cashfree checkout.")} Your membership is saved; use the Pay button at the top to try again.`);
       } else {
         setError(getApiError(requestError, "Unable to start this course offer."));
       }
@@ -63,55 +80,35 @@ export default function Membership({ courses, memberships, payments, waiver, wai
       setCheckoutOfferId("");
     }
   }
-  const unpaidCourses = new Set(memberships.filter((membership) => {
-    if (!["active", "pending_payment"].includes(membership.status)) return false;
-    const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
-    return paid < Number(membership.totalAmount);
-  }).map((membership) => membership.courseId));
+  const unpaidCourses = new Set(memberships
+    .filter((membership) => isOpenMembership(membership) && dueAmount(membership) > 0)
+    .map((membership) => membership.courseId));
+  const consent = { needed: !demo && !alreadyAccepted, checked: agreed, onChange: setAgreed };
+
   return <>
-    <PageHeader eyebrow="Account" title="Membership & payments" description="Your membership, payment history, and current gym agreement." />
-    <Notice error={error} />
-    <Card title="Courses & offers" eyebrow="Plans set by your gym">
-      {courses.length ? <div className="course-grid">{courses.map((course) => (
-        <article className="panel course-card" key={course.id}>
-          <div className="course-top"><StatusPill tone="primary">{course.category}</StatusPill><span className="overline">AVAILABLE OFFER</span></div>
-          <h2>{course.name}</h2>
-          <p className="muted">{course.description || "Choose a membership duration to get started."}</p>
-          {course.CoursePlans?.length ? <div className="client-offer-list">{course.CoursePlans.slice().sort((a, b) => Number(a.durationMonths) - Number(b.durationMonths)).map((plan) => {
-            const offerId = `${course.id}-${plan.durationMonths}`;
-            const busy = checkoutOfferId === offerId;
-            const unpaid = unpaidCourses.has(course.id);
-            return <div className="client-offer-row" key={plan.id}>
-              <span><b>{plan.durationMonths} {Number(plan.durationMonths) === 1 ? "month" : "months"}</b><small>Membership offer</small></span>
-              <strong>{currency(plan.price)}</strong>
-              <Button type="button" variant="outline" disabled={!alreadyAccepted || Boolean(checkoutOfferId) || Boolean(checkoutMembershipId) || unpaid} onClick={() => checkoutOffer(course, plan)}>
-                {busy ? "Starting…" : !alreadyAccepted ? "Accept waiver to continue" : unpaid ? "Pay current balance below" : "Choose & pay"}
-              </Button>
-            </div>;
-          })}</div> : <p className="muted">No membership offers are available for this course yet.</p>}
-        </article>
-      ))}</div> : <EmptyState title="No courses available" detail="The gym will publish course offers here when they are ready." />}
+    <PageHeader eyebrow="Account" title="Membership & payments" description="Choose a plan and pay securely in a few taps." />
+    <Notice error={error} onDismiss={() => setError("")} />
+    {demoPayment && <DemoPaymentModal payment={demoPayment} onClose={() => setDemoPayment(null)} />}
+    <MembershipStatus memberships={memberships} canPay={canPay} consent={consent} lockedReason={lockedReason} busy={paymentBusy} payingId={checkoutMembershipId} onPay={checkout} />
+    {!hasPhone && <section className="mship-step is-blocked" aria-label="Phone number needed">
+      <span className="mship-step-number" aria-hidden="true">!</span>
+      <div className="mship-step-body">
+        <b>Add your phone number to pay online</b>
+        <small>The payment provider needs a mobile number to send your payment confirmation.</small>
+        <div className="mship-step-actions"><Button variant="outline" onClick={openProfile}>Go to Profile</Button></div>
+      </div>
+    </section>}
+    <Card className="mship-plans-card" title="Choose your plan" eyebrow="Plans & pricing">
+      <div id="choose-plan" />
+      <PlanPicker initialPlan={pendingPlan} courses={courses} canPay={canPay && !checkoutMembershipId} consent={consent} lockedReason={lockedReason} blockedCourseIds={unpaidCourses} busy={Boolean(checkoutOfferId)} error={error} onCheckout={checkoutOffer} />
     </Card>
     <div className="dashboard-grid">
-      <Card title="Memberships" eyebrow="Your plans">
-        {memberships.length ? <div className="membership-list">{memberships.map((membership) => {
-          const paid = (membership.Payments ?? []).reduce((sum, payment) => sum + (payment.voidedAt ? 0 : Number(payment.amount || 0)), 0);
-          const due = Math.max(0, Number((Number(membership.totalAmount) - paid).toFixed(2)));
-          return <article className="membership-row" key={membership.id}>
-            <div><b>{membership.Course?.name ?? "Gym membership"}</b><small>{dateLabel(membership.startDate)} — {dateLabel(membership.endDate)}</small></div>
-            <StatusPill tone={membership.status === "active" ? "success" : membership.status === "pending_payment" || membership.status === "expired" ? "warning" : "neutral"}>{membership.status.replaceAll("_", " ")}</StatusPill>
-            <strong>{currency(membership.totalAmount)}</strong>
-            {["active", "pending_payment"].includes(membership.status) && due > 0 && <Button type="button" variant="outline" disabled={!alreadyAccepted || Boolean(checkoutMembershipId)} onClick={() => checkout(membership.id)}>{checkoutMembershipId === membership.id ? "Opening…" : !alreadyAccepted ? "Accept waiver to pay" : `Pay ${currency(due)}`}</Button>}
-          </article>;
-        })}</div> : <EmptyState title="No membership found" detail="The gym team can help you choose a course and membership plan." />}
+      <Card title="Your memberships" eyebrow="History">
+        <MembershipList memberships={memberships} canPay={canPay} busy={paymentBusy} payingId={checkoutMembershipId} onPay={checkout} />
       </Card>
-      <Card title="Gym agreement" eyebrow={`Current waiver · version ${currentVersion}`}>
-        {waiver?.text && <div className="waiver-copy">{waiver.text}</div>}
-        <div className="waiver-acceptance">{alreadyAccepted ? <StatusPill tone="success">Agreement accepted</StatusPill> : <><label className="checkbox-field"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} /><span>I have read and agree to the current gym waiver.</span></label><Button onClick={accept} disabled={!accepted || saving}>{saving ? "Recording…" : "Accept agreement"}</Button></>}</div>
+      <Card title="Payments" eyebrow="Receipts">
+        <PaymentList payments={payments} />
       </Card>
     </div>
-    <Card title="Payment history" eyebrow="Recorded by the gym">
-      {payments.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id}><td>{dateLabel(payment.dateTime)}</td><td>{payment.paymentMethod ?? "—"}</td><td>{currency(payment.amount)}</td><td><StatusPill tone={payment.voidedAt ? "warning" : "success"}>{payment.voidedAt ? "voided" : "recorded"}</StatusPill></td></tr>)}</tbody></table></div> : <EmptyState title="No payments recorded yet" detail="Payments recorded by the gym will appear here." />}
-    </Card>
   </>;
 }

@@ -114,3 +114,54 @@ test("Gemini does not retry twice and requires an explicit model", async () => {
   assert.equal(count, 2);
   await assert.rejects(requestGeminiPlan("prompt", { environment: { GEMINI_API_KEY: "k" } }), GeminiConfigError);
 });
+
+test("missing profile fields are reported in plain words with their keys", async () => {
+  const { computeDietTargets, IncompleteProfileError } = await import("../src/services/dietTargets.js");
+  try {
+    computeDietTargets({ dateOfBirth: null, heightCm: 170, weightKg: null, goalCategory: null, today: "2026-11-06" });
+    assert.fail("expected IncompleteProfileError");
+  } catch (error) {
+    assert.ok(error instanceof IncompleteProfileError);
+    assert.deepEqual(error.missing, ["dateOfBirth", "weightKg", "goalCategory"]);
+    assert.equal(error.message, "Add the client's date of birth, weight, goal to create a diet plan.");
+  }
+});
+
+test("a busy Gemini model falls back to GEMINI_FALLBACK_MODEL, and timeouts count as busy", async () => {
+  const { GeminiBusyError } = await import("../src/services/gemini.js");
+  const urls = [];
+  const plan = await requestGeminiPlan("prompt", {
+    environment: { ...environment, GEMINI_FALLBACK_MODEL: "backup-model" },
+    wait: async () => {},
+    fetchImpl: async (url) => { urls.push(url); return url.includes("backup-model") ? geminiResponse(planWithCalories(2000)) : geminiResponse({}, 503); },
+  });
+  assert.equal(plan.title, "Test plan");
+  assert.equal(urls.length, 3);
+  assert.match(urls[2], /backup-model/);
+  const timeout = Object.assign(new Error("timed out"), { name: "TimeoutError" });
+  await assert.rejects(requestGeminiPlan("prompt", { environment, wait: async () => {}, fetchImpl: async () => { throw timeout; } }), GeminiBusyError);
+});
+
+test("a plan that misses the calorie target is regenerated once with a correction", async () => {
+  const { generateValidatedPlan } = await import("../src/services/gemini.js");
+  const prompts = [];
+  const responses = [geminiResponse(planWithCalories(2400)), geminiResponse(planWithCalories(2000))];
+  const plan = await generateValidatedPlan("base prompt", 2000, {
+    environment, wait: async () => {},
+    fetchImpl: async (_url, init) => { prompts.push(JSON.parse(init.body).contents[0].parts[0].text); return responses.shift(); },
+  });
+  assert.equal(plan.title, "Test plan");
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /previous plan totalled 2400 kcal.*2000 kcal/s);
+});
+
+test("active dietary restrictions are passed to the AI; inactive ones are not", async () => {
+  const { buildDietPrompt } = await import("../src/services/gemini.js");
+  const base = { gender: "female", weightKg: 55, heightCm: 155, goalCategory: "fat_loss", allergies: [] };
+  const targets = { age: 24, category: "combat", dailyCalories: 1600, macros: { proteinG: 100, carbsG: 180, fatG: 50 } };
+  const active = buildDietPrompt({ profile: { ...base, dietRestrictions: { active: true, avoid: ["Dairy", "Coffee"], suitable: ["Chilla"] } }, targets });
+  assert.match(active, /"avoidFoods":\["Dairy","Coffee"\]/);
+  assert.match(active, /"suitableFoods":\["Chilla"\]/);
+  const inactive = buildDietPrompt({ profile: { ...base, dietRestrictions: { active: false, avoid: ["Dairy"] } }, targets });
+  assert.doesNotMatch(inactive, /"avoidFoods":/);
+});

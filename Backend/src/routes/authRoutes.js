@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   changePassword,
+  demoLogin,
   getCurrentUser,
   login,
   logout,
@@ -38,6 +39,7 @@ authRoutes.post(
 );
 authRoutes.post("/forgot-password", publicRateLimit({ limit: 3, windowMs: 60 * 60 * 1000, keyPrefix: "password-reset" }), validateRequest({ body: forgotPasswordSchema }), requestPasswordReset);
 authRoutes.post("/reset-password", publicRateLimit({ limit: 5, windowMs: 60 * 60 * 1000, keyPrefix: "password-reset-complete" }), validateRequest({ body: resetPasswordSchema }), resetPassword);
+authRoutes.post("/demo-login", publicRateLimit({ limit: 20, windowMs: 15 * 60 * 1000, keyPrefix: "demo-login" }), demoLogin);
 authRoutes.post("/refresh", publicRateLimit({ limit: 60, windowMs: 15 * 60 * 1000, keyPrefix: "auth-refresh" }), refreshSession);
 authRoutes.post("/logout", logout);
 authRoutes.get("/me", requireAuthentication, getCurrentUser);

@@ -1,6 +1,7 @@
 import JWT from "jsonwebtoken";
 import { ACCESS_COOKIE } from "../auth.js";
 import { User, UserStatus } from "../models/index.js";
+import { demoWriteBlocked } from "../utils/demo.js";
 
 // Loads an active user whose token version still matches, or null.
 export async function loadActiveUser(id, { tokenVersion, transaction } = {}) {
@@ -41,6 +42,13 @@ export async function requireAuthentication(req, res, next) {
         message: "Unauthorized",
       });
     }
+    if (demoWriteBlocked(user, req.method)) {
+      return res.status(403).json({
+        status: "error",
+        message: "This is a read-only demo account. Sign up for your own account to make changes.",
+        code: "DEMO_READ_ONLY",
+      });
+    }
     req.user = user;
     return next();
   } catch (error) {
@@ -51,3 +59,4 @@ export async function requireAuthentication(req, res, next) {
     });
   }
 }
+

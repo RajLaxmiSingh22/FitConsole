@@ -4,6 +4,7 @@ import { computeDietTargets, IncompleteProfileError } from "../services/dietTarg
 import {
   buildDietPrompt,
   buildTweakPrompt,
+  GeminiBusyError,
   GeminiConfigError,
   generateValidatedPlan,
 } from "../services/gemini.js";
@@ -13,11 +14,15 @@ import { getPagination, paginatedData } from "../utils/pagination.js";
 
 function generationErrorResponse(res, error) {
   if (error instanceof IncompleteProfileError) {
-    return res.status(409).json({ status: "error", message: `${error.message} Update the client profile first.` });
+    return res.status(409).json({ status: "error", message: error.message, code: "PROFILE_INCOMPLETE", missing: error.missing });
   }
   if (error instanceof GeminiConfigError) {
     console.error("Diet plan generation is not configured:", error.message);
     return res.status(503).json({ status: "error", message: "Diet generation is not configured." });
+  }
+  if (error instanceof GeminiBusyError) {
+    console.error("Diet plan generation is temporarily unavailable:", error.message);
+    return res.status(503).json({ status: "error", message: "The AI meal-plan service is busy right now. Please try again in a minute.", code: "AI_BUSY" });
   }
   console.error("Diet plan generation failed:", error.message);
   return res.status(502).json({ status: "error", message: "Unable to generate a valid diet plan. Please try again." });
@@ -132,6 +137,14 @@ export async function createProgressEntry(req, res) {
       weightKg: value.weightKg ?? null,
       stamina: value.stamina ?? null,
       staminaNotes: value.note || null,
+      waistCm: value.waistCm ?? null,
+      chestCm: value.chestCm ?? null,
+      armCm: value.armCm ?? null,
+      hipsCm: value.hipsCm ?? null,
+      // Back-dated records are stored at noon IST on that day.
+      ...(value.recordedOn ? { recordedAt: new Date(`${value.recordedOn.toISOString().slice(0, 10)}T12:00:00+05:30`) } : {}),
+      approximateDate: Boolean(value.approximateDate),
+      context: value.context || null,
     });
     return res.status(201).json({ status: "success", data: entry });
   } catch (error) {

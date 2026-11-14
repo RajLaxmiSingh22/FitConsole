@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react";
+import ClientAnalytics from "../../components/analytics/ClientAnalytics.jsx";
 import DownloadButton from "../../components/DownloadButton.jsx";
 import { Button, Card, EmptyState, Field, LoadingState, Notice, PageHeader, Pager } from "../../components/ui/index.js";
 import { useLoad } from "../../hooks/useLoad.js";
 import { apiCalls, getApiError, responseData } from "../../services/api.js";
 import { dateLabel, initials } from "../../utils/format.js";
 import ClientCreateForm from "./ClientCreateForm.jsx";
+import ClientImport from "./ClientImport.jsx";
 
 export default function ClientRoster({ trainers, onRefresh }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ search: "", trainerId: "" });
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [error, setError] = useState("");
   const [assignments, setAssignments] = useState({});
+  const [openClientId, setOpenClientId] = useState(null);
   const roster = useLoad(async () => responseData(await apiCalls.clients.list({
     page,
     search: filters.search || undefined,
@@ -45,10 +49,13 @@ export default function ClientRoster({ trainers, onRefresh }) {
     }
   }
 
+  if (openClientId) return <ClientAnalytics clientId={openClientId} viewerRole="owner" onBack={() => setOpenClientId(null)} />;
+
   return (
     <>
-      <PageHeader eyebrow={`${total} member profiles`} title="Clients" description="Member profiles, health goals, and trainer assignments." actions={<DownloadButton label="Export clients.xlsx" download={apiCalls.exports.clients} />} />
+      <PageHeader eyebrow={`${total} member profiles`} title="Clients" description="Member profiles, health goals, and trainer assignments." actions={<><Button variant="outline" onClick={() => setShowImport(!showImport)}>{showImport ? "Close import" : "Import from Excel"}</Button><DownloadButton label="Export clients.xlsx" download={apiCalls.exports.clients} /></>} />
       <Notice error={error || roster.error} />
+      {showImport && <ClientImport onImported={refreshAll} onClose={() => setShowImport(false)} />}
       <Card className="roster-card">
         <div className="toolbar">
           <Field label="Search clients"><input type="search" placeholder="Search by name, email, or phone" value={search} onChange={(event) => setSearch(event.target.value)} /></Field>
@@ -59,7 +66,7 @@ export default function ClientRoster({ trainers, onRefresh }) {
         {roster.loading && !roster.data ? <LoadingState label="Loading clients…" /> : rows.length ? <><div className="table-wrap"><table>
           <thead><tr><th>Client</th><th>Phone</th><th>Goal</th><th>Joined</th><th>Assigned trainer</th></tr></thead>
           <tbody>{rows.map((client) => <tr key={client.id}>
-            <td><div className="person-cell"><span className="avatar">{initials(client.User?.fullName)}</span><span><b>{client.User?.fullName ?? "New client"}</b><small>{client.User?.email}</small></span></div></td>
+            <td><button type="button" className="member-link" onClick={() => setOpenClientId(client.id)}><span className="avatar">{initials(client.User?.fullName)}</span><span><b>{client.User?.fullName ?? "New client"}</b><small>{client.User?.email}</small></span></button></td>
             <td>{client.phone || "—"}</td>
             <td>{client.goal || "—"}</td>
             <td>{dateLabel(client.joinedAt)}</td>

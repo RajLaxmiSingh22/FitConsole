@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { collectPublicEvent } from "../controllers/analyticsController.js";
+import { listPublicGallery } from "../controllers/galleryController.js";
 import { createTrialBooking } from "../controllers/leadController.js";
 import { optionalAuthentication } from "../middleware/optionalAuthentication.js";
 import { publicRateLimit } from "../middleware/publicRateLimit.js";
@@ -20,6 +21,11 @@ publicRoutes.post(
   publicRateLimit({ limit: 120, windowMs: 60 * 60 * 1000, keyPrefix: "analytics-event" }),
   validateRequest({ body: analyticsEventSchema }),
   collectPublicEvent,
+);
+publicRoutes.get(
+  "/gallery",
+  publicRateLimit({ limit: 300, windowMs: 60 * 60 * 1000, keyPrefix: "public-gallery" }),
+  listPublicGallery,
 );
 
 export default publicRoutes;
