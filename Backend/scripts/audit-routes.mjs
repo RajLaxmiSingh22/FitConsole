@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import dotenv from "dotenv";
 import pg from "pg";
+import { discoverRoutes } from "./lib/routes.mjs";
 
 const backend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 dotenv.config({ path: path.join(backend, ".env") });
@@ -47,54 +48,6 @@ function runNode(args) {
   });
 }
 
-// ---------- route discovery ----------
-const ROLES = ["owner", "trainer", "client"];
-// Probes a middleware that is a role guard (its code checks `roles.includes`): which roles pass it?
-function roleGuardRoles(fn) {
-  if (!fn.toString().includes("roles.includes")) return null;
-  return ROLES.filter((role) => {
-    let passed = false;
-    fn({ user: { id: "x", role } }, { status() { return this; }, json() { return this; } }, () => { passed = true; });
-    return passed;
-  });
-}
-
-async function discoverRoutes() {
-  const appSource = await readFile(path.join(backend, "src/app.js"), "utf8");
-  const imports = Object.fromEntries([...appSource.matchAll(/import (\w+)(?:, \{ (\w+) \})? from "\.\/routes\/(\w+)\.js";/g)]
-    .flatMap(([, def, named, file]) => [[def, [file, "default"]], ...(named ? [[named, [file, named]]] : [])]));
-  const mounts = [...appSource.matchAll(/app\.use\("([^"]+)", (\w+)\);/g)].map(([, prefix, name]) => ({ prefix, name }));
-  const routes = [];
-  for (const { prefix, name } of mounts) {
-    const [file, exportName] = imports[name];
-    const router = (await import(pathToFileURL(path.join(backend, "src/routes", `${file}.js`))))[exportName];
-    let routerAuth = false; let routerRoles = null;
-    for (const layer of router.stack) {
-      if (!layer.route) {
-        if (layer.handle.name === "requireAuthentication") routerAuth = true;
-        const roles = roleGuardRoles(layer.handle);
-        if (roles) routerRoles = routerRoles ? routerRoles.filter((role) => roles.includes(role)) : roles;
-        continue;
-      }
-      let roles = routerRoles;
-      for (const item of layer.route.stack) {
-        const guard = roleGuardRoles(item.handle);
-        if (guard) roles = roles ? roles.filter((role) => guard.includes(role)) : guard;
-      }
-      const names = layer.route.stack.map((item) => item.handle?.name || item.name);
-      for (const method of Object.keys(layer.route.methods)) {
-        routes.push({
-          method: method.toUpperCase(),
-          path: `${prefix}${layer.route.path === "/" ? "" : layer.route.path}`,
-          auth: routerAuth || names.includes("requireAuthentication"),
-          roles: roles ?? ROLES,
-        });
-      }
-    }
-  }
-  return routes;
-}
-
 // ---------- calls ----------
 async function login(pathname, body) {
   const response = await fetch(`${BASE}${pathname}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -111,7 +64,7 @@ const SESSION_ENDING = new Set(["POST /api/auth/logout", "POST /api/auth/refresh
 
 async function main() {
   const { CSRF_EXEMPT_PATHS } = await import(pathToFileURL(path.join(backend, "src/middleware/csrfProtection.js")));
-  const routes = await discoverRoutes();
+  const routes = await discoverRoutes(backend);
 
   console.log(`Creating ${DB} …`);
   await adminQuery(`CREATE DATABASE "${DB}"`);

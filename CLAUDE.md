@@ -54,10 +54,19 @@ Run commands from the corresponding package directory:
 cd Backend && npm test
 cd Backend && npm run migrate
 cd Backend && npm run audit:routes   # every route × role × CSRF on a throwaway database
+cd Backend && npm run docs:generate  # rebuild the /docs endpoint directory from the routes
 cd Frontend && npm run build
 ```
 
 Development commands are `npm run dev` in each package. The backend requires PostgreSQL and configured values from `Backend/.env`; `Backend/.env.example` lists the expected settings. Password reset additionally needs SMTP settings and an HTTPS frontend URL in production. The frontend uses `Frontend/.env.example` for public Vite configuration. There is no frontend test or lint script in the inspected package manifest.
+
+## Documentation rule
+
+After ANY change to routes, roles, auth, database schema, env variables, payments, the demo account or admin features: run npm run docs:generate, update the matching section of the /docs page, and add an entry to docs/CHANGELOG.md written for a gym owner. A task is not done until npm run docs:check passes.
+
+- `Backend/scripts/generate-api-docs.js` reads every route from the Express app (shared route listing in `Backend/scripts/lib/routes.mjs`) and writes `Frontend/src/docs/endpoints.json`; never edit that file by hand.
+- Each route needs a one-line, plain-English description in `Backend/src/routes/routeDescriptions.js`; generation fails for missing or stale entries.
+- `npm test` runs `docs:check`. CHANGELOG entries use `## YYYY-MM-DD · Title`, then **What changed** and **What you need to do** lists (newest first, no code).
 
 ## Phase workflow
 

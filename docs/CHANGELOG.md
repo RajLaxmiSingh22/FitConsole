@@ -1,33 +1,63 @@
-# Changelog
+# What's new
 
-## 2026-11-14
+<!--
+Newest first. Shown to the gym owner on the /docs page under "What's new".
+Format for each entry:
+## YYYY-MM-DD · Short title
+**What changed**
+- One plain-language line per change (no code, no file names).
+**What you need to do**
+- What the owner should do, or "Nothing."
+-->
 
-### Database
-- All migrations are squashed into one baseline, `Backend/db/migrations/000_baseline.sql`, generated with `pg_dump --schema-only` from a database built by the old files. Its schema dump is identical to the old chain's (empty diff).
-- Databases that already ran the old migrations (or the interim `202611140003_schema_baseline.sql`) record `000_baseline.sql` without running it. A partly migrated database stops with a message naming the first missing file.
-- New tables and columns folded into the baseline: `gallery_items`; Cloudinary `url`/`public_id` on `user_avatars`; course cover fields on `courses`.
+## 2026-11-14 · Documentation that stays up to date
+**What changed**
+- The list of everything the app can do (the endpoint directory on this page) is now built from the app itself, so it always matches what the app really does. It lists all 119 actions, who can use each one, and which need the extra security token.
+- This "What's new" section was added so you can see every change in one place.
+**What you need to do**
+- Nothing.
 
-### Media (Cloudinary)
-- Profile photos, gallery photos/videos, course covers and site assets are stored in Cloudinary under `fitconsole/` (`users/avatars/<role>/<userId>/`, `gallery/{images,videos}/`, `courses/<courseId>/`, `site/`).
-- Owner Gallery manager (upload, caption, show/hide, reorder, delete) and a public gallery that shows the owner's selection.
-- Course covers: upload/change/remove, four built-in default covers, alt text; shown on owner course cards and public program cards.
+## 2026-11-14 · Faster app and safer database updates
+**What changed**
+- The owner, trainer and member screens now load only when they are needed, so the website opens faster.
+- The database setup was combined into a single starting point. Your existing data was not changed, and a backup was taken first.
+**What you need to do**
+- Nothing.
 
-### Website
-- New landing hero (Cloudinary background video), glass navbar with scroll progress and section highlighting, scroll reveals, programs marquee, "Pick your fight" program cards and a back-to-top button. All motion respects reduced-motion settings.
-- Removed the "Sample details" demo notice from About, Contact and legal pages.
+## 2026-11-14 · Demo account
+**What changed**
+- When someone in the demo account presses Pay, they now see a short explanation with "Create my account" or "Maybe later" instead of an error. If they sign up, they return to the plan they picked.
+- A small "DEMO" label shows next to the name while the demo account is in use.
+- The demo account still cannot change anything or make payments.
+**What you need to do**
+- Nothing.
 
-### Demo account
-- "DEMO" pill in the top bar. Pressing Pay opens a modal with "Create my account" or "Maybe later" instead of an error.
-- The demo account stays fully read-only on the server. The short-lived sandbox test-payment endpoint (`/api/demo-payments`, `CASHFREE_SANDBOX_*`) was removed.
+## 2026-11-14 · Course covers
+**What changed**
+- Each course can have its own cover photo, shown on your Courses page and on the public Programs page. Courses without a photo get one of four built-in covers (combat, conditioning, kids, strength).
+- Coaches on each course card now show as small photo circles; you can change coaches in "Edit course".
+**What you need to do**
+- Optional: open Courses → Edit course to upload a cover and add a short image description.
 
-### Fixes
-- CSRF: the client refreshes its token once and retries when a request is rejected for a missing or stale token.
-- Course prices must be above 0, and longer plans may not cost less than shorter ones (checked in the form and on the server).
-- ₹ renders in every font (Noto Sans fallback for the rupee glyph).
-- Profile photos from Cloudinary display across origins (`Cross-Origin-Resource-Policy`).
+## 2026-11-14 · Gallery and photo storage
+**What changed**
+- New Gallery page in your workspace: upload photos and videos, add titles and captions, choose what the website shows, and set the order.
+- Profile photos, gallery items and course covers are now stored in Cloudinary (online media storage), in tidy folders.
+**What you need to do**
+- Add your Cloudinary details on the server if they are not set yet; without them, gallery and cover uploads are turned off.
+- Upload real gym photos to the Gallery; until then the website shows placeholder tiles.
 
-### Tooling
-- `npm run audit:routes` calls every route as each role, with and without CSRF, on a throwaway database.
-- The owner, trainer, client and docs workspaces load on demand; main bundle 557 kB → 352 kB.
-- `/api/health` keeps its `{ status: "ok", service, database }` shape as the documented exception to the response envelope.
-- `nodemon` moved to devDependencies; unused `assests/` files removed.
+## 2026-11-14 · New website look
+**What changed**
+- New home page with a moving background, a navigation bar that follows you as you scroll, animated sections, a scrolling list of your programs and a back-to-top button. Visitors who turn off motion in their device settings see a still version.
+- The "Sample details" notice was removed from the About, Contact and legal pages.
+**What you need to do**
+- Check that the address, phone number, email and gym story on the About and Contact pages are your real details. The phone and email are still placeholders and are now clickable links.
+
+## 2026-11-14 · Prices and payments
+**What changed**
+- Course prices must be above zero, and a longer plan can no longer cost less than a shorter one (for example, 6 months cannot be cheaper than 3 months).
+- The rupee sign (₹) now shows correctly everywhere, including in small text.
+- Saving a course no longer fails with a "security token" error after the page has been open for a while.
+**What you need to do**
+- If a course's existing prices break the new rule, you will be asked to fix them the next time you edit them.

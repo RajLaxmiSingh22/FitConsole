@@ -9,8 +9,10 @@
     "migrate": "node src/migrate.js",
     "seed:demo": "node src/seeds/demoClient.js",
     "seed:demo-gym": "node src/seeds/demoGym.js",
-    "test": "node --test",
-    "audit:routes": "node scripts/audit-routes.mjs"
+    "test": "node --test && npm run docs:check",
+    "audit:routes": "node scripts/audit-routes.mjs",
+    "docs:generate": "node scripts/generate-api-docs.js",
+    "docs:check": "node scripts/generate-api-docs.js --check"
   },
   "dependencies": {
     "argon2": "^0.45.1",
