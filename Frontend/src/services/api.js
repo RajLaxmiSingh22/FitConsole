@@ -12,6 +12,11 @@ const apiBaseUrl = (
   import.meta.env.VITE_API_URL || "http://localhost:9000/api"
 ).replace(/\/+$/, "");
 
+// Profile photo URL; `version` changes whenever the photo does, so browsers refetch it.
+export function avatarUrl(userId, version) {
+  return version ? `${apiBaseUrl}/profile/avatar/${encodeURIComponent(userId)}?v=${version}` : null;
+}
+
 export const api = axios.create({
   baseURL: apiBaseUrl,
   headers: { "Content-Type": "application/json" },
@@ -44,7 +49,7 @@ export function setSession(session) {
 }
 
 export function refreshSession() {
-  refreshInFlight ??= api.post("/auth/refresh", null, { skipAuthRefresh: true })
+  refreshInFlight ??= api.post("/auth/refresh", undefined, { skipAuthRefresh: true })
     .then((response) => {
       const data = response.data?.data;
       setSession(data);
@@ -65,6 +70,18 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error.config;
+    // The CSRF token lives in memory, so a page hot-reload or a login in another tab can leave it
+    // missing or stale while the session cookie is still valid. Refresh once to get a matching token.
+    if (error.response?.status === 403 && /csrf/i.test(error.response.data?.message ?? "") && config && !config._csrfRetried && !config.skipAuthRefresh) {
+      config._csrfRetried = true;
+      try {
+        await refreshSession();
+        delete config.headers["X-CSRF-Token"];
+        return api(config);
+      } catch {
+        return Promise.reject(error);
+      }
+    }
     if (error.response?.status === 401 && config && !config.skipAuthRefresh && !config._retried && readSessionHint()) {
       config._retried = true;
       try {
@@ -104,9 +121,10 @@ export const apiCalls = {
   health: () => api.get("/health"),
   auth: {
     login: (credentials) => api.post("/auth/login", credentials, { skipAuthRefresh: true }),
+    demoLogin: () => api.post("/auth/demo-login", undefined, { skipAuthRefresh: true }),
     register: (account) => api.post("/auth/register", account, { skipAuthRefresh: true }),
     refresh: refreshSession,
-    logout: () => api.post("/auth/logout", null, { skipAuthRefresh: true }),
+    logout: () => api.post("/auth/logout", undefined, { skipAuthRefresh: true }),
     me: () => api.get("/auth/me"),
     changePassword: (passwords) => api.patch("/auth/password", passwords),
     requestPasswordReset: (email) => api.post("/auth/forgot-password", { email }),
@@ -126,6 +144,25 @@ export const apiCalls = {
   analytics: {
     event: (event) => api.post("/public/events", event),
     summary: (params) => api.get("/analytics/summary", { params }),
+    members: () => api.get("/analytics/members"),
+    gym: (params) => api.get("/analytics/gym", { params }),
+  },
+  gallery: {
+    public: () => api.get("/public/gallery"),
+    list: () => api.get("/gallery"),
+    // Large videos need longer than the default timeout.
+    upload: (file, meta) => api.post("/gallery", file, { params: meta, headers: { "Content-Type": file.type }, timeout: 300000 }),
+    update: (id, changes) => api.patch(`/gallery/${encodeURIComponent(id)}`, changes),
+    reorder: (ids) => api.put("/gallery/order", { ids }),
+    remove: (id) => api.delete(`/gallery/${encodeURIComponent(id)}`),
+  },
+  profile: {
+    get: () => api.get("/profile"),
+    update: (profile) => api.patch("/profile", profile),
+    // Uploads go on to Cloudinary, which can take longer than the default timeout.
+    uploadAvatar: (blob) => api.put("/profile/avatar", blob, { headers: { "Content-Type": blob.type }, timeout: 60000 }),
+    removeAvatar: () => api.delete("/profile/avatar"),
+    setCoaching: (enabled) => api.put("/profile/coaching", { enabled }),
   },
   users: {
     list: (params) => api.get("/users", { params }),
@@ -134,6 +171,8 @@ export const apiCalls = {
   },
   clients: {
     list: (params) => api.get("/clients", { params }),
+    importTemplate: () => api.get("/clients/import/template.xlsx", { responseType: "blob" }),
+    importFile: (file, commit) => api.post("/clients/import", file, { params: { commit }, headers: { "Content-Type": "application/octet-stream" } }),
     me: () => api.get("/clients/me"),
     get: (id) => api.get(`/clients/${id}`),
     create: (client) => api.post("/clients", client),
@@ -149,8 +188,12 @@ export const apiCalls = {
     createDietEntry: (id, entry) => api.post(`/clients/${id}/diet-entries`, entry),
     dietPlans: (id) => api.get(`/clients/${id}/diet-plans`),
     generateDietPlan: (id, input = {}) => api.post(`/clients/${id}/diet-plans/generate`, input, { timeout: 90000 }),
-    suggestDietTweak: (id, planId) => api.post(`/clients/${id}/diet-plans/${planId}/suggest-tweak`, null, { timeout: 90000 }),
+    suggestDietTweak: (id, planId) => api.post(`/clients/${id}/diet-plans/${planId}/suggest-tweak`, undefined, { timeout: 90000 }),
     progress: (id) => api.get(`/clients/${id}/progress`),
+    analytics: (id, range = 30) => api.get(`/clients/${id}/analytics`, { params: { range } }),
+    analyticsCalendar: (id, month) => api.get(`/clients/${id}/analytics/calendar`, { params: { month } }),
+    saveWellness: (id, checkin) => api.post(`/clients/${id}/wellness`, checkin),
+    addTrainerNote: (id, note) => api.post(`/clients/${id}/trainer-notes`, note),
     logProgress: (id, entry) => api.post(`/clients/${id}/progress`, entry),
     waivers: (id) => api.get(`/clients/${id}/waivers`),
   },
@@ -168,6 +211,15 @@ export const apiCalls = {
     update: (id, course) => api.patch(`/courses/${id}`, course),
     deactivate: (id) => api.delete(`/courses/${id}`),
     setTrainers: (id, trainerIds) => api.put(`/courses/${id}/trainers`, { trainerIds }),
+    uploadCover: (id, file, alt) => api.post(`/courses/${encodeURIComponent(id)}/cover`, file, { params: { alt }, headers: { "Content-Type": file.type }, timeout: 60000 }),
+    removeCover: (id) => api.delete(`/courses/${encodeURIComponent(id)}/cover`),
+  },
+  schedule: {
+    list: () => api.get("/schedule"),
+    manage: () => api.get("/schedule/manage"),
+    create: (session) => api.post("/schedule", session),
+    update: (id, changes) => api.patch(`/schedule/${encodeURIComponent(id)}`, changes),
+    remove: (id) => api.delete(`/schedule/${encodeURIComponent(id)}`),
   },
   memberships: {
     list: (params) => api.get("/memberships", { params }),
@@ -189,11 +241,14 @@ export const apiCalls = {
   },
   waivers: {
     current: () => api.get("/waivers/current"),
+    versions: () => api.get("/waivers/versions"),
+    publish: (text) => api.post("/waivers", { text }),
     accept: (documentReference) => api.post("/waivers/accept", { documentReference }),
   },
   attendance: {
     list: (params) => api.get("/attendance", { params }),
     checkIn: (input) => api.post("/attendance/check-in", input),
+    checkOut: (id) => api.post(`/attendance/${encodeURIComponent(id)}/check-out`),
   },
   dietEntries: {
     update: (id, entry) => api.patch(`/diet-entries/${id}`, entry),

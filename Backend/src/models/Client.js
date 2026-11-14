@@ -7,7 +7,16 @@ const Client = sequelize.define("Client", {
   trainerId: DataTypes.UUID,
   phone: DataTypes.STRING,
   emergencyContactPhone: DataTypes.STRING,
+  // Parent or guardian for members under 18; their phone is emergencyContactPhone.
+  guardianName: { type: DataTypes.STRING(255), field: "guardian_name" },
   dateOfBirth: DataTypes.DATEONLY,
+  // Planned training weekdays (ISO 1–7); null = default Mon / Wed / Fri.
+  trainingDays: { type: DataTypes.ARRAY(DataTypes.SMALLINT), field: "training_days" },
+  targetWeightKg: { type: DataTypes.DECIMAL(5, 2), field: "target_weight_kg", validate: { min: 0.01 } },
+  // Temporary restrictions: { avoid[], suitable[], source, since, expectedDuration, reviewOn, active, notes }.
+  dietRestrictions: { type: DataTypes.JSONB, field: "diet_restrictions" },
+  // { types[], minutesMin, minutesMax, notes }
+  workoutProfile: { type: DataTypes.JSONB, field: "workout_profile" },
   heightCm: { type: DataTypes.DECIMAL(5, 2), validate: { min: 0.01 } },
   weightKg: { type: DataTypes.DECIMAL(5, 2), validate: { min: 0.01 } },
   goal: DataTypes.TEXT,

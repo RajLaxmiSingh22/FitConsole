@@ -2,11 +2,15 @@ import { useState } from "react";
 import { EmptyState, LoadingState, Notice } from "../../components/ui/index.js";
 import { useLoad } from "../../hooks/useLoad.js";
 import { apiCalls, responseData } from "../../services/api.js";
+import AgreementEditor from "./AgreementEditor.jsx";
 import AttendanceDesk from "./AttendanceDesk.jsx";
 import ClientRoster from "./ClientRoster.jsx";
 import CourseCatalog from "./CourseCatalog.jsx";
+import GalleryManager from "./GalleryManager.jsx";
+import MemberAnalytics from "./MemberAnalytics.jsx";
 import MembershipDesk from "./MembershipDesk.jsx";
 import OwnerDashboard from "./OwnerDashboard.jsx";
+import OwnerProfile from "./OwnerProfile.jsx";
 import PaymentLedger from "./PaymentLedger.jsx";
 import Reports from "./Reports.jsx";
 import TrainerDirectory from "./TrainerDirectory.jsx";
@@ -34,10 +38,14 @@ export default function OwnerWorkspace({ section }) {
   }
   if (section === "Trainers") {
     if (trainers.loading && !trainers.data) return <LoadingState />;
-    return <><Notice error={trainers.error} /><TrainerDirectory trainers={trainerRows} onRefresh={refresh} /></>;
+    return <><Notice error={trainers.error} /><TrainerDirectory trainers={trainerRows} clients={clientRows} onRefresh={refresh} /></>;
   }
   if (section === "Payments") return <PaymentLedger clients={clientRows} courses={courseRows} />;
-  if (section === "Attendance") return <AttendanceDesk clients={clientRows} courses={courseRows} />;
+  if (section === "Attendance") return <AttendanceDesk clients={clientRows} courses={courseRows} trainers={trainerRows} />;
   if (section === "Reports") return <Reports />;
+  if (section === "Member Analytics") return <MemberAnalytics />;
+  if (section === "Gallery") return <GalleryManager />;
+  if (section === "Gym agreement") return <AgreementEditor />;
+  if (section === "Profile") return <OwnerProfile onCoachingChange={refresh} />;
   return <EmptyState title={`${section} is coming next`} detail="This workspace section will connect to the matching API workflow." />;
 }

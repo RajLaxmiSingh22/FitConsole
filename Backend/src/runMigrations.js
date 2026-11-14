@@ -4,33 +4,39 @@ import path from "node:path";
 
 const migrationDirectory = fileURLToPath(new URL("../db/migrations/", import.meta.url));
 
-export const BASELINE_MIGRATION = "202610290000_baseline.sql";
-// The pre-baseline migrations folded into the baseline, in order.
+export const BASELINE_MIGRATION = "000_baseline.sql";
+// An interim baseline that held the same schema; a database that recorded it is fully migrated.
+export const INTERIM_BASELINES = ["202611140003_schema_baseline.sql"];
+// Everything folded into the current baseline, in order. A database with existing tables must have
+// applied all of these before the baseline can be recorded in their place.
 export const LEGACY_MIGRATIONS = [
-  "202610270001_website_leads_and_analytics.sql",
-  "202610270002_cashfree_payment_review.sql",
-  "202610270003_membership_pending_payment.sql",
-  "202610270004_attendance_ist_uniqueness.sql",
-  "202610270005_payment_void_audit.sql",
-  "202610270006_reconcile_unpaid_memberships.sql",
-  "202610280001_user_token_version.sql",
-  "202610280002_payment_reminder_resolution.sql",
-  "202610280003_refresh_tokens.sql",
-  "202610280004_diet_profile_and_progress.sql",
-  "202610280005_owner_analytics_indexes.sql",
-  "202610280006_payment_invoice_numbers.sql",
-  "202610280007_reminder_log.sql",
+  "202610290000_baseline.sql",
+  "202611040001_email_log.sql",
+  "202611040002_cashfree_payment_session_repair.sql",
+  "202611040003_waiver_documents.sql",
+  "202611050001_analytics_event_optional_ids.sql",
+  "202611050002_class_sessions.sql",
+  "202611060001_trainer_public_profile.sql",
+  "202611060002_progress_entries_client_fk_repair.sql",
+  "202611060003_member_analytics.sql",
+  "202611060004_client_training_days.sql",
+  "202611070001_courses_age_level_guardian.sql",
+  "202611080001_client_fitness_profile.sql",
+  "202611090001_user_avatars.sql",
+  "202611140001_cloudinary_media.sql",
+  "202611140002_course_covers.sql",
 ];
 
 // Decides how to treat the baseline on this database: "run" it, mark it "applied", or "skip" because it is already recorded.
 export function planBaseline({ applied, hasExistingSchema }) {
   if (applied.has(BASELINE_MIGRATION)) return "skip";
   if (!hasExistingSchema) return "run";
+  if (INTERIM_BASELINES.some((name) => applied.has(name))) return "applied";
   const missing = LEGACY_MIGRATIONS.filter((name) => !applied.has(name));
   if (missing.length) {
     throw new Error(
       `This database predates the schema baseline and is missing ${missing.length} older migration(s), starting with ${missing[0]}. `
-      + "Check out commit a59d7ee (the last release with individual migrations), run `npm run migrate`, then upgrade.",
+      + "Check out the last release that still has the individual migration files, run `npm run migrate`, then upgrade.",
     );
   }
   return "applied";

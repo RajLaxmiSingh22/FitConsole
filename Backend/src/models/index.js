@@ -1,6 +1,7 @@
 import Attendance from "./Attendance.js";
 import AnalyticsEvent from "./AnalyticsEvent.js";
 import CashfreeOrder from "./CashfreeOrder.js";
+import ClassSession from "./ClassSession.js";
 import Client from "./Client.js";
 import Course from "./Course.js";
 import CoursePlan from "./CoursePlan.js";
@@ -9,6 +10,7 @@ import ConversationParticipant from "./ConversationParticipant.js";
 import DietPlan from "./DietPlan.js";
 import DietPlanReview from "./DietPlanReview.js";
 import DietTracker from "./DietTracker.js";
+import EmailLog from "./EmailLog.js";
 import DietTrackerAuthor from "./DietTrackerAuthor.js";
 import Member from "./Member.js";
 import Membership from "./Membership.js";
@@ -24,12 +26,19 @@ import ProgressEntry from "./ProgressEntry.js";
 import Trainer from "./Trainer.js";
 import TrainerDetails from "./TrainerDetails.js";
 import User from "./User.js";
+import UserAvatar from "./UserAvatar.js";
+import GalleryItem from "./GalleryItem.js";
 import UserStatus from "./UserStatus.js";
 import WebsiteLead from "./WebsiteLead.js";
 import WaiverAcceptance from "./WaiverAcceptance.js";
 import WaiverAudit from "./WaiverAudit.js";
+import WaiverDocument from "./WaiverDocument.js";
+import TrainerNote from "./TrainerNote.js";
+import WellnessCheckin from "./WellnessCheckin.js";
 
 User.hasOne(Trainer, { foreignKey: "userId", onDelete: "CASCADE" });
+User.hasOne(UserAvatar, { foreignKey: "userId", onDelete: "CASCADE" });
+UserAvatar.belongsTo(User, { foreignKey: "userId" });
 Trainer.belongsTo(User, { foreignKey: "userId" });
 Trainer.hasOne(TrainerDetails, { foreignKey: "userId", onDelete: "CASCADE" });
 TrainerDetails.belongsTo(Trainer, { foreignKey: "userId" });
@@ -39,6 +48,10 @@ User.hasOne(Client, { foreignKey: "userId", onDelete: "CASCADE" });
 Client.belongsTo(User, { foreignKey: "userId" });
 Trainer.belongsToMany(Course, { through: "trainer_courses", foreignKey: "trainerId" });
 Course.belongsToMany(Trainer, { through: "trainer_courses", foreignKey: "courseId" });
+Course.hasMany(ClassSession, { foreignKey: { name: "courseId", allowNull: false }, onDelete: "CASCADE" });
+ClassSession.belongsTo(Course, { foreignKey: { name: "courseId", allowNull: false } });
+Trainer.hasMany(ClassSession, { foreignKey: "trainerId", sourceKey: "userId" });
+ClassSession.belongsTo(Trainer, { foreignKey: "trainerId", targetKey: "userId" });
 Course.hasMany(CoursePlan, { foreignKey: "courseId", onDelete: "CASCADE" });
 CoursePlan.belongsTo(Course, { foreignKey: "courseId" });
 Trainer.hasMany(Client, { foreignKey: "trainerId", sourceKey: "id" });
@@ -79,6 +92,13 @@ Client.hasMany(WaiverAcceptance, { foreignKey: { name: "clientId", allowNull: fa
 WaiverAcceptance.belongsTo(Client, { foreignKey: { name: "clientId", allowNull: false } });
 WaiverAcceptance.hasOne(WaiverAudit, { foreignKey: "waiverAcceptanceId", onDelete: "CASCADE" });
 WaiverAudit.belongsTo(WaiverAcceptance, { foreignKey: "waiverAcceptanceId" });
+User.hasMany(WaiverDocument, { foreignKey: "publishedBy" });
+Client.hasMany(WellnessCheckin, { foreignKey: { name: "clientId", allowNull: false }, onDelete: "CASCADE" });
+WellnessCheckin.belongsTo(Client, { foreignKey: { name: "clientId", allowNull: false } });
+Client.hasMany(TrainerNote, { foreignKey: { name: "clientId", allowNull: false }, onDelete: "CASCADE" });
+TrainerNote.belongsTo(Client, { foreignKey: { name: "clientId", allowNull: false } });
+TrainerNote.belongsTo(User, { as: "author", foreignKey: "authorId" });
+WaiverDocument.belongsTo(User, { as: "publisher", foreignKey: "publishedBy" });
 Client.hasMany(ProgressEntry, { foreignKey: { name: "clientId", allowNull: false } });
 ProgressEntry.belongsTo(Client, { foreignKey: { name: "clientId", allowNull: false } });
 Conversation.hasMany(Message, { foreignKey: "conversationId", onDelete: "CASCADE" });
@@ -94,6 +114,8 @@ User.belongsToMany(Conversation, {
   otherKey: "conversationId",
 });
 User.hasOne(UserStatus, { foreignKey: "userId", onDelete: "CASCADE" });
+User.hasMany(EmailLog, { foreignKey: "userId", onDelete: "CASCADE" });
+EmailLog.belongsTo(User, { foreignKey: "userId" });
 UserStatus.belongsTo(User, { foreignKey: "userId" });
 User.hasMany(Message, { foreignKey: "senderId" });
 Message.belongsTo(User, { foreignKey: "senderId" });
@@ -116,6 +138,7 @@ export {
   Attendance,
   AnalyticsEvent,
   CashfreeOrder,
+  ClassSession,
   Client,
   Course,
   CoursePlan,
@@ -125,6 +148,7 @@ export {
   DietPlanReview,
   DietTracker,
   DietTrackerAuthor,
+  EmailLog,
   Member,
   Membership,
   LeadActivity,
@@ -139,8 +163,13 @@ export {
   Trainer,
   TrainerDetails,
   User,
+  UserAvatar,
+  GalleryItem,
   UserStatus,
   WebsiteLead,
   WaiverAcceptance,
   WaiverAudit,
+  WaiverDocument,
+  TrainerNote,
+  WellnessCheckin,
 };

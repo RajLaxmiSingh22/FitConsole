@@ -34,9 +34,11 @@ function genderOffset(gender) {
   return -78; // Midpoint when gender is not recorded as male or female.
 }
 
+const PROFILE_FIELD_LABELS = { dateOfBirth: "date of birth", heightCm: "height", weightKg: "weight", goalCategory: "goal" };
+
 export class IncompleteProfileError extends Error {
   constructor(missing) {
-    super(`Client profile is missing: ${missing.join(", ")}.`);
+    super(`Add the client's ${missing.map((field) => PROFILE_FIELD_LABELS[field] ?? field).join(", ")} to create a diet plan.`);
     this.missing = missing;
   }
 }

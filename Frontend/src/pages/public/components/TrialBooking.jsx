@@ -1,6 +1,22 @@
 import { useState } from "react";
 import { Button, Field, Notice } from "../../../components/ui/index.js";
+import { trialTimeSlots } from "../../../constants/publicContent.js";
 import { apiCalls, getApiError } from "../../../services/api.js";
+
+// Today's date in the visitor's own time zone, for the date picker's minimum.
+function localToday() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Opens the native calendar when the field itself is clicked, not just its small icon.
+function openPicker(event) {
+  try {
+    event.currentTarget.showPicker?.();
+  } catch {
+    // Some browsers only allow showPicker from certain gestures; the field still works by typing.
+  }
+}
 
 export default function TrialBooking({ courses }) {
   const params = new URLSearchParams(window.location.search);
@@ -31,8 +47,12 @@ export default function TrialBooking({ courses }) {
       <Field label="Phone *"><input required type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
       <Field label="Email"><input type="email" autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></Field>
       <Field label="Program"><select value={form.courseId} onChange={(event) => setForm({ ...form, courseId: event.target.value })}><option value="">Any / not sure</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</select></Field>
-      <Field label="Preferred date"><input type="date" min={new Date().toISOString().slice(0, 10)} value={form.preferredDate} onChange={(event) => setForm({ ...form, preferredDate: event.target.value })} /></Field>
-      <Field label="Preferred time"><input maxLength="100" placeholder="Not configured — enter a preference" value={form.preferredSlot} onChange={(event) => setForm({ ...form, preferredSlot: event.target.value })} /></Field>
+      <Field label="Preferred date"><input type="date" min={localToday()} value={form.preferredDate} onClick={openPicker} onChange={(event) => setForm({ ...form, preferredDate: event.target.value })} /></Field>
+      <Field label="Preferred time"><select value={form.preferredSlot} onChange={(event) => setForm({ ...form, preferredSlot: event.target.value })}>
+        <option value="">Choose a time of day</option>
+        {trialTimeSlots.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </select></Field>
+      <p className="trial-time-note field--wide">Open Mon–Sat 6 AM–11 PM and Sunday 6 AM–6 PM. The gym will confirm the exact slot with you.</p>
       <Field label="Message" className="field--wide"><textarea rows="3" maxLength="2000" value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} /></Field>
       <label className="checkbox-field field--wide"><input type="checkbox" required checked={form.consent} onChange={(event) => setForm({ ...form, consent: event.target.checked })} /><span>I agree that the gym may contact me about this trial request. See <a href="/privacy">privacy information</a>.</span></label>
       <div className="form-actions"><Button type="submit" disabled={state.busy}>{state.busy ? "Sending…" : "Send trial request ↗"}</Button></div>

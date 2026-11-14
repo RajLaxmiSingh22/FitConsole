@@ -116,9 +116,10 @@ export async function updateClient(req, res) {
   try {
     const value = req.validated.body;
     if (req.user.role === "trainer") {
-      const allowedKeys = ["goal", "goalCategory", "dietPreference", "allergies", "healthIssues", "injuries"];
+      // Coaches maintain the training profile their diet plans depend on (body measurements, goal, diet, health).
+      const allowedKeys = ["goal", "goalCategory", "dietPreference", "allergies", "healthIssues", "injuries", "dateOfBirth", "gender", "heightCm", "weightKg", "trainingDays"];
       if (Object.keys(value).some((key) => !allowedKeys.includes(key))) {
-        return res.status(403).json({ status: "error", message: "Trainers may only update health and goal fields." });
+        return res.status(403).json({ status: "error", message: "Trainers may only update training profile fields." });
       }
       if (!(await canAccessClient(req.user, req.params.id))) {
         return res.status(404).json({ status: "error", message: "Client not found." });

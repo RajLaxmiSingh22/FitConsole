@@ -7,9 +7,12 @@ export const navigation = {
     ["Trainers", "♧"],
     ["Payments", "₹"],
     ["Attendance", "✓"],
+    ["Member Analytics", "◔"],
     ["Reports", "↗"],
-    ["Website Leads", "✉"],
-    ["Website Analytics", "◷"],
+    ["Gallery", "▧"],
+    ["Gym agreement", "§"],
+    ["Profile", "◉"],
+    // Website Leads and Website Analytics are hidden for now; their pages and APIs remain available.
   ],
   trainer: [
     ["Dashboard", "⌂"],
@@ -23,6 +26,7 @@ export const navigation = {
     ["Home", "⌂"],
     ["Meal plan", "✳"],
     ["Check-in", "⌁"],
+    ["Analytics", "↗"],
     ["Membership", "▣"],
     ["Messages", "✉"],
     ["Profile", "◉"],

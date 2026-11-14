@@ -1,8 +1,17 @@
+import StreakCard from "../../components/analytics/StreakCard.jsx";
 import { Button, Card, EmptyState, PageHeader, StatCard, StatusPill } from "../../components/ui/index.js";
+import { useLoad } from "../../hooks/useLoad.js";
+import { apiCalls, responseData } from "../../services/api.js";
 import { today } from "../../utils/dates.js";
 import { dateLabel } from "../../utils/format.js";
 
-export default function Home({ user, plans, entries, memberships, attendance, summary, onNavigate }) {
+function HomeStreak({ clientId, onOpen }) {
+  const analytics = useLoad(async () => (clientId ? responseData(await apiCalls.clients.analytics(clientId, 30)) : null), [clientId]);
+  if (!analytics.data) return null;
+  return <StreakCard analytics={analytics.data} onOpen={onOpen} />;
+}
+
+export default function Home({ clientId, user, plans, entries, memberships, attendance, summary, onNavigate }) {
   const activeMembership = memberships.find((membership) => membership.status === "active");
   const latestEntry = entries[0];
   const latestPlan = plans[0];
@@ -13,6 +22,7 @@ export default function Home({ user, plans, entries, memberships, attendance, su
       <div><p className="overline">YOUR TRAINING STATUS</p><h2>{activeMembership ? "You’re in the fight." : "Your next round starts here."}</h2><p>{activeMembership ? `${activeMembership.Course?.name ?? "Active course"} · Membership ends ${dateLabel(activeMembership.endDate)}` : "Ask the front desk about an active membership and upcoming classes."}</p></div>
       <div className="client-hero-mark">FC<span> / TRAINING CLUB</span></div>
     </div>
+    <HomeStreak clientId={clientId} onOpen={() => onNavigate("Analytics")} />
     <div className="stat-grid stat-grid--4">
       <StatCard label="Membership" value={activeMembership ? "ACTIVE" : "—"} detail={activeMembership ? `Until ${dateLabel(activeMembership.endDate)}` : "No active membership"} tone={activeMembership ? "success" : ""} />
       <StatCard label="Latest weight" value={latestEntry?.weightKg ? `${latestEntry.weightKg} kg` : "—"} detail={latestEntry ? `Logged ${dateLabel(latestEntry.recordedOn)}` : "Add your first check-in"} />
