@@ -1,30 +1,18 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { classifyGalleryUpload, detectVideoType } from "../src/controllers/galleryController.js";
+import { galleryUploadKind } from "../src/controllers/galleryController.js";
 import { avatarFolder, cloudinaryConfig, galleryFolder, signParams } from "../src/services/cloudinary.js";
-import { galleryReorderSchema, galleryUpdateSchema, galleryUploadQuerySchema } from "../src/validation/index.js";
+import { directUploadRequestSchema, galleryCreateSchema, galleryReorderSchema, galleryUpdateSchema } from "../src/validation/index.js";
 
-const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from("ftypisom"), Buffer.alloc(16)]);
-const mov = Buffer.concat([Buffer.from([0, 0, 0, 0x14]), Buffer.from("ftypqt  "), Buffer.alloc(16)]);
-const webm = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(16)]);
-const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(16)]);
-
-test("gallery videos are identified by signature", () => {
-  assert.equal(detectVideoType(mp4), "video/mp4");
-  assert.equal(detectVideoType(mov), "video/quicktime");
-  assert.equal(detectVideoType(webm), "video/webm");
-  assert.equal(detectVideoType(jpeg), null);
-});
-
-test("gallery uploads must match their declared type", () => {
-  assert.deepEqual(classifyGalleryUpload(jpeg, "image/jpeg"), { mediaType: "image", mimeType: "image/jpeg" });
-  assert.equal(classifyGalleryUpload(mp4, "video/mp4").mediaType, "video");
-  assert.equal(classifyGalleryUpload(mov, "video/mp4").mimeType, "video/quicktime");
-  assert.ok(classifyGalleryUpload(jpeg, "video/mp4").error);
-  assert.ok(classifyGalleryUpload(mp4, "image/png").error);
-  assert.ok(classifyGalleryUpload(webm, "video/mp4").error);
-  assert.ok(classifyGalleryUpload(Buffer.from("<svg>-------"), "image/svg+xml").error);
+test("gallery uploads are planned from the declared type and size", () => {
+  assert.deepEqual(galleryUploadKind("image/jpeg", 1000), { kind: "gallery-image", mediaType: "image" });
+  assert.deepEqual(galleryUploadKind("video/quicktime", 50 * 1024 * 1024), { kind: "gallery-video", mediaType: "video" });
+  assert.ok(galleryUploadKind("image/svg+xml", 10).error);
+  assert.ok(galleryUploadKind("image/gif", 10).error);
+  assert.equal(galleryUploadKind("image/png", 10 * 1024 * 1024 + 1).status, 413);
+  assert.equal(galleryUploadKind("video/mp4", 100 * 1024 * 1024 + 1).status, 413);
+  assert.equal(galleryUploadKind("video/mp4", 0).status, 413);
 });
 
 test("cloudinary folders follow the documented layout", () => {
@@ -45,8 +33,11 @@ test("cloudinary signatures sort params and skip empty values", () => {
 });
 
 test("gallery request schemas", () => {
-  assert.equal(galleryUploadQuerySchema.validate({ title: " Mats " }).value.published, true);
-  assert.ok(galleryUploadQuerySchema.validate({}).error);
+  const publicId = "fitconsole/gallery/images/0b8e2f4e-1c3a-4d5e-8f60-123456789abc";
+  assert.equal(galleryCreateSchema.validate({ publicId, mediaType: "image", title: " Mats " }).value.published, true);
+  assert.ok(galleryCreateSchema.validate({ publicId, mediaType: "image" }).error);
+  assert.ok(galleryCreateSchema.validate({ publicId: "https://evil.example/x.jpg", mediaType: "image", title: "Mats" }).error);
+  assert.ok(directUploadRequestSchema.validate({ mimeType: "image/png" }).error);
   assert.ok(galleryUpdateSchema.validate({}).error);
   assert.ok(galleryUpdateSchema.validate({ sortOrder: -1 }).error);
   assert.equal(galleryUpdateSchema.validate({ isPublished: false, url: "x" }).value.url, undefined);

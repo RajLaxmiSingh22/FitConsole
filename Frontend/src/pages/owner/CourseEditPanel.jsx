@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Field, Notice } from "../../components/ui/index.js";
 import { courseCover, defaultCoverKeys, defaultCoverLabels, defaultCoverUrl } from "../../constants/media.js";
-import { apiCalls, getApiError } from "../../services/api.js";
+import { apiCalls, getApiError, responseData } from "../../services/api.js";
+import { uploadToCloudinary } from "../../services/cloudinaryUpload.js";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -34,6 +35,7 @@ export default function CourseEditPanel({ course, trainers, onClose, onSaved }) 
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState(null);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   useEffect(() => {
@@ -75,13 +77,20 @@ export default function CourseEditPanel({ course, trainers, onClose, onSaved }) 
       await apiCalls.courses.update(course.id, { category, coverImageAlt: alt.trim() || null, coverDefault });
       const before = course.Trainers?.map((trainer) => trainer.userId) ?? [];
       if (before.length !== assigned.length || before.some((id) => !assigned.includes(id))) await apiCalls.courses.setTrainers(course.id, assigned);
-      if (file) await apiCalls.courses.uploadCover(course.id, file, alt.trim());
+      if (file) {
+        // Straight from the browser to Cloudinary; the API signs the upload and checks it before saving.
+        setProgress(0);
+        const signed = responseData(await apiCalls.courses.signCoverUpload(course.id, file));
+        const uploaded = await uploadToCloudinary(file, signed, setProgress);
+        await apiCalls.courses.saveCover(course.id, uploaded.public_id, alt.trim());
+      }
       else if (removeUpload) await apiCalls.courses.removeCover(course.id);
       onSaved();
     } catch (requestError) {
       setError(getApiError(requestError, "Unable to save the course."));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -132,9 +141,10 @@ export default function CourseEditPanel({ course, trainers, onClose, onSaved }) 
             {trainer.User?.fullName}
           </label>) : <p className="muted">No trainers yet.</p>}
         </fieldset>
+        {progress !== null && <progress className="upload-progress" max="100" value={progress} aria-label="Cover upload progress">{progress}%</progress>}
         <Notice error={error} />
       </div>
-      <footer><Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save course"}</Button></footer>
+      <footer><Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button><Button onClick={save} disabled={busy}>{progress !== null ? `Uploading… ${progress}%` : busy ? "Saving…" : "Save course"}</Button></footer>
     </aside>
   </div>;
 }

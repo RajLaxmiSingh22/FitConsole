@@ -20,6 +20,7 @@
 - Frontend layering: `services/` (API client and other data access), `hooks/` (data loading and state), `pages/<area>/` (one screen or section per file), `layouts/`, `components/ui/` (shared controls, imported via `components/ui/index.js`), `constants/`, and `utils/` (formatters such as `currency`, `dateLabel`). API wrappers and `responseData` live in `Frontend/src/services/api.js`.
 - Account settings are under `/api/profile` (name, photo, owner coaching toggle). Photos live in `user_avatars` (JPEG/PNG/WebP checked by file signature, 200 KB max) — in Cloudinary (row keeps `url`/`public_id`) when configured, otherwise as bytes — and are served from `/api/profile/avatar/:id` (a redirect for Cloudinary copies), publicly only for coaches. An owner who also coaches gets a `trainers` row; turning it off is refused while anything references it, because deleting a trainer cascades.
 - Gallery: owner-only `/api/gallery` (raw image ≤10 MB or MP4/MOV/WebM video ≤100 MB, title/caption in the query; edit, show/hide, reorder via `PUT /order`, delete) backed by `gallery_items`; the public page reads published items from `GET /api/public/gallery` and falls back to placeholder tiles when empty.
+- Gallery files and course covers upload directly from the browser to Cloudinary: the API signs one upload (`POST /api/gallery/uploads`, `POST /api/courses/:id/cover/upload`) locked to one folder, a random public_id and allowed formats, then the save route looks the asset up in our account (`verifyDirectUpload`) and checks folder, type, format and size before storing Cloudinary's own URL. Profile photos (200 KB) still upload through the API.
 - Owner client import: `GET /api/clients/import/template.xlsx` and `POST /api/clients/import` (raw .xlsx/.csv, 2 MB, 500 rows; `?commit=true` to save). Parsing and row checks live in `services/clientImport.js`; ready rows are created in one transaction, duplicates and invalid rows are skipped, and imported members get no usable password (they use Forgot password).
 - Public lead and analytics endpoints are under `/api/public`; owner-only lead management (including active-course assignment and enrollment) is under `/api/leads`; owner website analytics is under `/api/analytics/summary`.
 - Trial conversion links a pre-existing client/member account only. Opening hours (owner-provided) live in `Frontend/src/constants/openingHours.js`; the class timetable is owner-managed (`/api/schedule`, Attendance → Class schedule). There is no branch, address or gym-contact configuration, so do not invent those details.
@@ -51,7 +52,7 @@
 Run commands from the corresponding package directory:
 
 ```sh
-cd Backend && npm test
+cd Backend && npm test   # no .env needed; set TEST_DATABASE_URL (a disposable Postgres) to also run the database tests
 cd Backend && npm run migrate
 cd Backend && npm run audit:routes   # every route × role × CSRF on a throwaway database
 cd Backend && npm run docs:generate  # rebuild the /docs endpoint directory from the routes
@@ -75,5 +76,5 @@ After ANY change to routes, roles, auth, database schema, env variables, payment
 3. Preserve existing behavior and contracts; add focused tests for new validation, permissions, and transactional flows.
 4. Run relevant backend tests and the frontend production build. Report actual commands, results, blockers, and remaining work.
 5. Summarize changed files, migrations, endpoints, and manual setup, then stop for review before beginning the next phase.
-6. Commits and PRs are authored only by RajLaxmiSingh22 <230652337+RajLaxmiSingh22@users.noreply.github.com> (set in this repo's git config). Never add "Co-authored-by", "Generated with", "Claude-Session" or any other AI attribution to commit messages or PR descriptions.
+6. Commits and PRs are authored only by RajLaxmiSingh22 <230652337+RajLaxmiSingh22@users.noreply.github.com> (set in this repo's git config). Never add "Co-Authored-By", "Generated with Claude Code", "Claude-Session" or any other AI attribution to commit messages or PR descriptions; attribution is switched off in `.claude/settings.json` (`"attribution": { "commit": "", "pr": "" }`).
 7. Before any commit or push, inspect the diff and staged files, keep private/generated artifacts out, and wait for approval before pushing.

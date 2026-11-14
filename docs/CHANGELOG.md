@@ -10,6 +10,14 @@ Format for each entry:
 - What the owner should do, or "Nothing."
 -->
 
+## 2026-11-14 · Faster, safer photo and video uploads
+**What changed**
+- Gallery photos and videos and course covers now go straight from your browser to Cloudinary, with a progress bar while they upload. Large videos (up to 100 MB) no longer pass through the app's server.
+- The app still checks every upload: only the allowed photo and video types, within the size limits, and only into your own gym's storage folders. Anything else is refused and removed.
+- Course covers are always stored as cropped 1200×675 WebP images, which also removes hidden photo details such as the location where the photo was taken.
+**What you need to do**
+- Nothing. Uploads work the same way from the Gallery page and Courses → Edit course.
+
 ## 2026-11-14 · Documentation that stays up to date
 **What changed**
 - The list of everything the app can do (the endpoint directory on this page) is now built from the app itself, so it always matches what the app really does. It lists all 119 actions, who can use each one, and which need the extra security token.

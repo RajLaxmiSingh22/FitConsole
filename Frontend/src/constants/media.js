@@ -23,7 +23,7 @@ export function autoCoverKey(course) {
   if ((course.maxAge && course.maxAge <= 15) || /\bkid|junior|child/i.test(course.name ?? "")) return "kids";
   const category = (course.category ?? "").toLowerCase();
   if (category.includes("strength") || category.includes("power")) return "strength";
-  if (category.includes("condition") || category.includes("wellness") || category.includes("cardio")) return "conditioning";
+  if (["condition", "fitness", "wellness", "cardio", "hiit"].some((word) => category.includes(word))) return "conditioning";
   return "combat";
 }
 

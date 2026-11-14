@@ -100,3 +100,7 @@ backups/
 # Design reference screenshots and archived notes (local only).
 design/references/
 archive/
+
+# README screenshots (generated from demo data only).
+!docs/screenshots/
+!docs/screenshots/*.png

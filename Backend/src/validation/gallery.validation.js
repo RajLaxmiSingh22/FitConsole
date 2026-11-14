@@ -4,8 +4,18 @@ import { stripUnknownFields } from "./common.validation.js";
 const title = Joi.string().trim().min(2).max(80);
 const caption = Joi.string().trim().max(160).allow("");
 
-// Upload metadata travels in the query string because the body is the raw file.
-export const galleryUploadQuerySchema = stripUnknownFields(Joi.object({
+// A planned direct upload: the browser declares type and size before Cloudinary checks the real file.
+export const directUploadRequestSchema = stripUnknownFields(Joi.object({
+  mimeType: Joi.string().trim().lowercase().max(100).required(),
+  bytes: Joi.number().integer().min(1).max(2 * 1024 * 1024 * 1024).required(),
+}));
+
+// Cloudinary public_id returned by a signed direct upload (checked against our folder on the server).
+export const cloudinaryPublicId = Joi.string().max(255).pattern(/^[A-Za-z0-9_\-/]+$/);
+
+export const galleryCreateSchema = stripUnknownFields(Joi.object({
+  publicId: cloudinaryPublicId.required(),
+  mediaType: Joi.string().valid("image", "video").required(),
   title: title.required(),
   caption: caption.default(""),
   published: Joi.boolean().default(true),

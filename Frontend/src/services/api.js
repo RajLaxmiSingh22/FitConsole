@@ -151,7 +151,9 @@ export const apiCalls = {
     public: () => api.get("/public/gallery"),
     list: () => api.get("/gallery"),
     // Large videos need longer than the default timeout.
-    upload: (file, meta) => api.post("/gallery", file, { params: meta, headers: { "Content-Type": file.type }, timeout: 300000 }),
+    // Direct upload: ask for a signed upload, send the file to Cloudinary, then save the checked result.
+    signUpload: (file) => api.post("/gallery/uploads", { mimeType: file.type, bytes: file.size }),
+    create: (item) => api.post("/gallery", item, { timeout: 60000 }),
     update: (id, changes) => api.patch(`/gallery/${encodeURIComponent(id)}`, changes),
     reorder: (ids) => api.put("/gallery/order", { ids }),
     remove: (id) => api.delete(`/gallery/${encodeURIComponent(id)}`),
@@ -211,7 +213,8 @@ export const apiCalls = {
     update: (id, course) => api.patch(`/courses/${id}`, course),
     deactivate: (id) => api.delete(`/courses/${id}`),
     setTrainers: (id, trainerIds) => api.put(`/courses/${id}/trainers`, { trainerIds }),
-    uploadCover: (id, file, alt) => api.post(`/courses/${encodeURIComponent(id)}/cover`, file, { params: { alt }, headers: { "Content-Type": file.type }, timeout: 60000 }),
+    signCoverUpload: (id, file) => api.post(`/courses/${encodeURIComponent(id)}/cover/upload`, { mimeType: file.type, bytes: file.size }),
+    saveCover: (id, publicId, alt) => api.post(`/courses/${encodeURIComponent(id)}/cover`, { publicId, alt }, { timeout: 60000 }),
     removeCover: (id) => api.delete(`/courses/${encodeURIComponent(id)}/cover`),
   },
   schedule: {

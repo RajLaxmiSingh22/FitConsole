@@ -9,7 +9,7 @@
     "migrate": "node src/migrate.js",
     "seed:demo": "node src/seeds/demoClient.js",
     "seed:demo-gym": "node src/seeds/demoGym.js",
-    "test": "node --test && npm run docs:check",
+    "test": "node --import ./test/setup.js --test && npm run docs:check",
     "audit:routes": "node scripts/audit-routes.mjs",
     "docs:generate": "node scripts/generate-api-docs.js",
     "docs:check": "node scripts/generate-api-docs.js --check"
@@ -23,10 +23,10 @@
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
-    "joi": "^18.3.0",
+    "joi": "^18.3.2",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^3.0.3",
-    "nodemailer": "^6.10.1",
+    "nodemailer": "^10.5.0",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.7"
@@ -36,5 +36,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
-  }
+  },
+  "license": "MIT"
 }
