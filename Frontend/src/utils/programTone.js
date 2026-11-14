@@ -1,5 +1,5 @@
 // Visual accent per program category (colour is always paired with the category name in the UI).
-const tones = { combat: "red", strength: "green", conditioning: "yellow" };
+const tones = { combat: "red", mma: "red", boxing: "red", kickboxing: "red", strength: "green", conditioning: "yellow", fitness: "yellow" };
 
 export function programTone(category = "") {
   const key = category.toLowerCase();
