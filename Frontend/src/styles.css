@@ -1,9 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap");
-/* DM Sans and DM Mono have no rupee sign; this loads only the ₹ glyph from Noto Sans as a fallback. */
-@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&text=%E2%82%B9&display=swap");
 
 :root {
-  font-family: "DM Sans", "Noto Sans", sans-serif;
+  font-family: "Rupee Fallback", "DM Sans", sans-serif;
   color: #f3f1ed;
   background: #101111;
   font-synthesis: none;
@@ -21,8 +19,8 @@
   --green: #b6e65f;
   --yellow: #f1bc50;
   --pink: #e77aa8;
-  --mono: "DM Mono", "Noto Sans", monospace;
-  --display: "Barlow Condensed", "Noto Sans", Impact, sans-serif;
+  --mono: "Rupee Fallback", "DM Mono", monospace;
+  --display: "Rupee Fallback", "Barlow Condensed", Impact, sans-serif;
 }
 
 * { box-sizing: border-box; }
