@@ -1746,3 +1746,23 @@ button, input, select, textarea { font-family: inherit; }
 @media (max-width: 600px) {
   .program-card--trial:not([data-odd]) { display: flex; }
 }
+
+/* Membership plans (5 durations): one row of 5 on desktop, 3+2 centred on tablet, swipe row on mobile */
+.pricing-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; align-items: stretch; }
+.pricing-grid > .pricing-card { flex: 0 0 calc((100% - 4 * 14px) / 5); min-width: 0; display: flex; flex-direction: column; }
+.pricing-grid > .pricing-card > .button { margin-top: auto; }
+.pricing-grid > .pricing-card .pricing-includes { margin-bottom: 16px; }
+/* Best value is the strongest card: lime frame, lime top bar, larger price, filled button */
+.pricing-grid > .pricing-card.is-best { border: 2px solid var(--green); box-shadow: 0 0 0 4px #b6e65f1f, 0 30px 60px -28px #000; background: radial-gradient(120% 55% at 50% 0%, #b6e65f2e, transparent 65%), var(--surface); }
+.pricing-grid > .pricing-card.is-best::before { content: ""; position: absolute; inset: 0 0 auto; height: 5px; background: var(--green); border-radius: 6px 6px 0 0; }
+.pricing-grid > .pricing-card.is-best .pricing-amount { font-size: 44px; color: var(--green); }
+.pricing-grid > .pricing-card.is-best .button--primary { background: var(--green); color: #12160c; box-shadow: 0 0 24px #b6e65f66; }
+.pricing-grid > .pricing-card.is-best .button--primary:hover:not(:disabled) { background: #d2f583; }
+@media (max-width: 1100px) {
+  .pricing-grid > .pricing-card { flex-basis: calc((100% - 2 * 14px) / 3); }
+}
+@media (max-width: 600px) {
+  .pricing-grid { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; padding: 12px 2px 16px; }
+  .pricing-grid > .pricing-card { flex-basis: 78%; scroll-snap-align: center; }
+  .pricing-grid > .pricing-card.is-best { transform: none; }
+}
