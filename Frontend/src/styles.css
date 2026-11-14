@@ -1746,3 +1746,45 @@ button, input, select, textarea { font-family: inherit; }
 @media (max-width: 600px) {
   .program-card--trial:not([data-odd]) { display: flex; }
 }
+
+/* Membership plans (5 durations): one row of 5 on desktop, 3+2 centred on tablet, swipe row on mobile */
+.pricing-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; align-items: stretch; }
+.pricing-grid > .pricing-card { flex: 0 0 calc((100% - 4 * 14px) / 5); min-width: 0; display: flex; flex-direction: column; }
+.pricing-grid > .pricing-card > .button { margin-top: auto; }
+.pricing-grid > .pricing-card .pricing-includes { margin-bottom: 16px; }
+/* Best value is the strongest card: lime frame, lime top bar, larger price, filled button */
+.pricing-grid > .pricing-card.is-best { border: 2px solid var(--green); box-shadow: 0 0 0 4px #b6e65f1f, 0 30px 60px -28px #000; background: radial-gradient(120% 55% at 50% 0%, #b6e65f2e, transparent 65%), var(--surface); }
+.pricing-grid > .pricing-card.is-best::before { content: ""; position: absolute; inset: 0 0 auto; height: 5px; background: var(--green); border-radius: 6px 6px 0 0; }
+.pricing-grid > .pricing-card.is-best .pricing-amount { font-size: 44px; color: var(--green); }
+.pricing-grid > .pricing-card.is-best .button--primary { background: var(--green); color: #12160c; box-shadow: 0 0 24px #b6e65f66; }
+.pricing-grid > .pricing-card.is-best .button--primary:hover:not(:disabled) { background: #d2f583; }
+@media (max-width: 1100px) {
+  .pricing-grid > .pricing-card { flex-basis: calc((100% - 2 * 14px) / 3); }
+}
+@media (max-width: 600px) {
+  .pricing-grid { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; padding: 12px 2px 16px; }
+  .pricing-grid > .pricing-card { flex-basis: 78%; scroll-snap-align: center; }
+  .pricing-grid > .pricing-card.is-best { transform: none; }
+}
+
+/* Landing "Pick your fight": cover on top, body below; number overlays the cover */
+.fight-card { padding: 0; gap: 0; justify-content: flex-start; }
+.fight-cover { position: relative; height: 160px; overflow: hidden; border-bottom: 1px solid var(--line); background: #141414; }
+.fight-cover img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.2, .7, .2, 1); }
+.fight-card:hover .fight-cover img { transform: scale(1.05); }
+.fight-cover::after { content: ""; position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, #1b1a1a); pointer-events: none; }
+.fight-cover .fight-number { position: absolute; top: 6px; right: 10px; z-index: 1; color: #ffffffb3; font-size: 56px; text-shadow: 0 2px 14px #000a; transition: none; }
+.fight-card:hover .fight-cover .fight-number { color: #ffffffb3; }
+.fight-body { display: grid; gap: 10px; padding: 18px 22px 22px; }
+.fight-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fight-tag { padding: 4px 10px; border: 1px solid #ec362f66; border-radius: 999px; background: #ec362f1a; color: var(--red); font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+.fight-tags .fight-level { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.fight-card h3 { margin: 0; font-size: 34px; }
+.fight-card .fight-body > p { display: -webkit-box; margin: 0; overflow: hidden; color: #a8a39c; font-size: 13px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.fight-card > a { position: static; margin: 0 22px 22px; }
+.fight-card > a::before { content: none; }
+
+/* Owner course prices: gentle notes (not errors) */
+.plan-warnings { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.plan-warnings li { padding: 8px 10px; border-left: 3px solid var(--yellow); background: #f1bc500f; color: #f0ca77; font-size: 12px; line-height: 1.5; }
+.form-span { grid-column: 1 / -1; }

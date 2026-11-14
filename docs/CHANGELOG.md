@@ -10,6 +10,16 @@ Format for each entry:
 - What the owner should do, or "Nothing."
 -->
 
+## 2026-11-14 · Membership plans and program cards look tidier
+**What changed**
+- The website's membership plans now sit in one row of five on a computer, so the 12-month plan no longer sits alone on a second line. On tablets they show three then two, centred, and on phones you swipe through them.
+- The "Best value" plan (12 months) stands out more, with a green frame and a bigger price, and all "Join now" buttons line up at the bottom of their cards.
+- Program cards on the Programs page no longer repeat the category name in the picture; the category label above the title is the only one.
+- The "Pick your fight" cards on the home page show each program's picture at the top, one category label, the level in small text, and a short description that never cuts a word in half.
+- On the Courses page, you get a gentle note when a longer plan costs the same or more per month than the shorter plan before it, for example "3 months costs the same per month as 2 months". It is only a note: you can still save the prices.
+**What you need to do**
+- Look at the note on any course that shows one, and change the prices if you want members to save more on longer plans.
+
 ## 2026-11-14 · Clearer prices, programs and charts
 **What changed**
 - Prices now show one consistent rupee sign (₹) everywhere, including the small "from" prices in the membership plan picker.

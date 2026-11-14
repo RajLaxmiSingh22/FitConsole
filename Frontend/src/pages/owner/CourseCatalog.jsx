@@ -4,8 +4,16 @@ import { courseCover } from "../../constants/media.js";
 import CourseEditPanel from "./CourseEditPanel.jsx";
 import { durations } from "../../constants/memberships.js";
 import { apiCalls, getApiError } from "../../services/api.js";
-import { planErrors } from "../../utils/coursePrices.js";
+import { planErrors, planWarnings, valuesToEntries } from "../../utils/coursePrices.js";
 import { currency } from "../../utils/format.js";
+
+// Gentle, non-blocking note under the price fields (a longer plan saves nothing per month).
+function PlanWarnings({ warnings }) {
+  if (!warnings.length) return null;
+  return <ul className="plan-warnings" role="note" aria-label="Price notes">
+    {warnings.map((warning) => <li key={warning.months}>⚠ {warning.message}</li>)}
+  </ul>;
+}
 
 export default function CourseCatalog({ courses, trainers, refresh }) {
   const [showForm, setShowForm] = useState(false);
@@ -92,6 +100,7 @@ export default function CourseCatalog({ courses, trainers, refresh }) {
         <Field label="Category *"><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="combat">Combat</option><option value="strength">Strength</option><option value="conditioning">Conditioning</option><option value="wellness">Wellness</option><option value="combo">Combo</option></select></Field>
         <Field label="Description"><input value={description} onChange={(event) => setDescription(event.target.value)} /></Field>
         {durations.map(({ months, label }) => <Field label={`${label} price (₹)${months === 1 ? " *" : ""}`} key={months}><input type="number" min="1" step="0.01" required={months === 1} value={prices[months] ?? ""} aria-invalid={Boolean(priceErrors[months])} onChange={(event) => setPrices({ ...prices, [months]: event.target.value })} />{priceErrors[months] && <small className="field-error">{priceErrors[months]}</small>}</Field>)}
+        <div className="form-span"><PlanWarnings warnings={planWarnings(valuesToEntries(prices))} /></div>
         <div className="form-actions"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save course"}</Button></div>
       </form></Card>}
       {courses.length ? <div className="course-grid">{courses.map((course) => {
@@ -107,9 +116,11 @@ export default function CourseCatalog({ courses, trainers, refresh }) {
           <div className="course-card-body">
             <h2>{course.name}</h2><p className="muted">{course.description || "Membership program"}</p>
             <div className="price-grid">{durations.map(({ months, label }) => { const plan = course.CoursePlans?.find((item) => Number(item.durationMonths) === months); return <div key={months}><small>{label}</small><b>{plan ? currency(plan.price) : "—"}</b></div>; })}</div>
+          <PlanWarnings warnings={planWarnings((course.CoursePlans ?? []).map((plan) => ({ months: plan.durationMonths, price: plan.price })))} />
             {editingPrices === course.id ? <div className="form-grid">
               {durations.map(({ months, label }) => <Field key={months} label={`${label} price (₹)`}><input type="number" min="0.01" step="0.01" value={coursePrices[months] ?? ""} aria-invalid={Boolean(priceErrors[months])} onChange={(event) => setCoursePrices({ ...coursePrices, [months]: event.target.value })} />{priceErrors[months] && <small className="field-error">{priceErrors[months]}</small>}</Field>)}
-              <div className="form-actions"><Button onClick={() => saveCoursePrices(course)} disabled={savingPrices}>{savingPrices ? "Saving…" : "Publish offers"}</Button><Button variant="outline" onClick={() => setEditingPrices("")}>Cancel</Button></div>
+              <div className="form-span"><PlanWarnings warnings={planWarnings(valuesToEntries(coursePrices))} /></div>
+            <div className="form-actions"><Button onClick={() => saveCoursePrices(course)} disabled={savingPrices}>{savingPrices ? "Saving…" : "Publish offers"}</Button><Button variant="outline" onClick={() => setEditingPrices("")}>Cancel</Button></div>
             </div> : null}
             <div className="course-card-foot">
               <div className="avatar-stack" aria-label={coaches.length ? `Coaches: ${coaches.map((trainer) => trainer.User?.fullName).join(", ")}` : "No coaches assigned"}>

@@ -15,11 +15,13 @@ export const defaultCoverLabels = { combat: "Combat", conditioning: "Conditionin
 // Covers drawn as their own images (replacing that tile of the sheet). Combat is an impact starburst.
 const STANDALONE = { combat: "v1794673116/fitconsole/site/covers/combat.png" };
 
+// The covers have a small category label printed in their bottom-left corner; the card already shows the
+// category pill, so the transformations below cut that strip off before cropping (labels sit in the bottom ~60px).
 export function defaultCoverUrl(key) {
   const name = TILES[key] ? key : "combat";
-  if (STANDALONE[name]) return `${CLOUDINARY}/image/upload/c_fill,w_800,h_450/f_auto,q_auto/${STANDALONE[name]}`;
+  if (STANDALONE[name]) return `${CLOUDINARY}/image/upload/c_crop,x_0,y_0,w_1600,h_800/c_fill,w_800,h_400/f_auto,q_auto/${STANDALONE[name]}`;
   const [x, y] = TILES[name];
-  return `${CLOUDINARY}/image/upload/c_crop,x_${x},y_${y},w_800,h_450/f_auto,q_auto/${SHEET}`;
+  return `${CLOUDINARY}/image/upload/c_crop,x_${x},y_${y},w_800,h_390/f_auto,q_auto/${SHEET}`;
 }
 
 // The default for a course without an uploaded cover: the owner's pick, else kids/category.
