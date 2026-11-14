@@ -76,5 +76,5 @@ After ANY change to routes, roles, auth, database schema, env variables, payment
 3. Preserve existing behavior and contracts; add focused tests for new validation, permissions, and transactional flows.
 4. Run relevant backend tests and the frontend production build. Report actual commands, results, blockers, and remaining work.
 5. Summarize changed files, migrations, endpoints, and manual setup, then stop for review before beginning the next phase.
-6. Commits and PRs are authored only by RajLaxmiSingh22 <230652337+RajLaxmiSingh22@users.noreply.github.com> (set in this repo's git config). Never add "Co-authored-by", "Generated with", "Claude-Session" or any other AI attribution to commit messages or PR descriptions.
+6. Commits and PRs are authored only by RajLaxmiSingh22 <230652337+RajLaxmiSingh22@users.noreply.github.com> (set in this repo's git config). Never add "Co-Authored-By", "Generated with Claude Code", "Claude-Session" or any other AI attribution to commit messages or PR descriptions; attribution is switched off in `.claude/settings.json` (`"attribution": { "commit": "", "pr": "" }`).
 7. Before any commit or push, inspect the diff and staged files, keep private/generated artifacts out, and wait for approval before pushing.
