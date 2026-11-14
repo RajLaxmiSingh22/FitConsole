@@ -1,6 +1,8 @@
 // Generates Frontend/src/docs/endpoints.json for the owner /docs "Endpoint directory" from the real
 // Express routes. `npm run docs:generate` writes the file; `npm run docs:check` (part of npm test)
 // fails when the file is out of date or a route has no description in src/routes/routeDescriptions.js.
+// Must come first: the route modules load the database module, which needs DB settings (never connects).
+import "./lib/offlineEnv.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
