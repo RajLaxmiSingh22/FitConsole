@@ -1229,6 +1229,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; backgr
 
 /* Analytics — validated chart palette (dark surface #181919): blue, orange, aqua */
 :root { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-grid: #2a2c2b; --viz-axis: #7d807c; }
+/* Brand chart colours (Member Analytics): red main bars, lime highlights. */
+:root { --viz-brand: #D9443A; --viz-highlight: #C6F06B; }
 .viz { margin: 0; }
 .viz-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px; color: var(--muted); font-size: 11px; }
 .viz-legend span { display: inline-flex; align-items: center; gap: 6px; }
