@@ -10,6 +10,17 @@ Format for each entry:
 - What the owner should do, or "Nothing."
 -->
 
+## 2026-11-14 · Clearer prices, programs and charts
+**What changed**
+- Prices now show one consistent rupee sign (₹) everywhere, including the small "from" prices in the membership plan picker.
+- The Programs page is tidier: every program has the same style and a cover photo, prices and "Try it" buttons line up, and each card shows up to three coach photos. An empty spot in the last row now invites visitors to book a free trial.
+- The Courses form checks prices as you type: each price must be above zero, and a longer plan cannot cost less than a shorter one. The same rule applies when saving.
+- Courses in the combat, MMA, boxing and kickboxing group use a new default cover (an impact starburst), so the old white "X" no longer looks like a delete button.
+- Member Analytics charts use the gym's red and lime colours instead of blue. The busiest bar is labelled in the legend, so the highlight is clear without colour.
+**What you need to do**
+- Nothing. Courses that already use the old default cover will show the new one automatically.
+- Check your course prices if they were saved before this update. Any longer plan that now costs less than a shorter one will be flagged the next time you edit that course.
+
 ## 2026-11-14 · Faster, safer photo and video uploads
 **What changed**
 - Gallery photos and videos and course covers now go straight from your browser to Cloudinary, with a progress bar while they upload. Large videos (up to 100 MB) no longer pass through the app's server.
