@@ -1618,7 +1618,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; backgr
 .course-cover::after { content: ""; position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, var(--surface)); pointer-events: none; }
 .course-cover-tag { position: absolute; top: 18px; left: 18px; z-index: 1; padding: 5px 12px; border: 1px solid #ec362f99; border-radius: 999px; background: rgba(16, 17, 17, .6); color: #f38173; font-family: var(--mono); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; backdrop-filter: blur(6px); }
 .course-cover-default { position: absolute; right: 18px; bottom: 14px; z-index: 1; color: #a8a39c; font-family: var(--mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; }
-.course-cover-button { position: absolute; top: 14px; right: 14px; z-index: 1; padding: 8px 12px; border: 1px solid #ffffff33; border-radius: 6px; background: rgba(16, 17, 17, .75); color: var(--text); font: 600 12px var(--body, inherit); cursor: pointer; backdrop-filter: blur(6px); }
+.course-cover-button { position: absolute; top: 14px; right: 14px; z-index: 1; padding: 8px 12px; border: 1px solid #ffffff33; border-radius: 6px; background: rgba(16, 17, 17, .75); color: var(--text); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; backdrop-filter: blur(6px); }
 .course-cover-button:hover { border-color: var(--red); }
 .course-card-body { padding: 4px 24px 22px; }
 .course-card-body > h2 { margin: 0 0 6px; font-family: var(--display); font-size: 34px; text-transform: uppercase; }
@@ -1719,3 +1719,7 @@ button, input, select, textarea { font-family: inherit; }
 .docs-change-todo b { color: var(--yellow); }
 .docs-change-todo.is-none { background: transparent; padding: 0; }
 .docs-change-todo.is-none b { color: #c9c6c0; }
+.upload-progress { width: 100%; height: 6px; overflow: hidden; border: 0; border-radius: 3px; background: #2a2c2c; accent-color: var(--red); appearance: none; }
+.upload-progress::-webkit-progress-bar { background: #2a2c2c; }
+.upload-progress::-webkit-progress-value { background: var(--red); }
+.upload-progress::-moz-progress-bar { background: var(--red); }

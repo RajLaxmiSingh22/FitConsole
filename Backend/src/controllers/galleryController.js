@@ -1,41 +1,25 @@
 import { sequelize } from "../database.js";
 import { GalleryItem } from "../models/index.js";
-import { destroyMediaQuietly, isCloudinaryConfigured, uploadGalleryMedia } from "../services/cloudinary.js";
-import { detectImageType } from "./profileController.js";
+import { destroyMediaQuietly, isCloudinaryConfigured, signDirectUpload, verifyDirectUpload } from "../services/cloudinary.js";
 
 export const GALLERY_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const GALLERY_VIDEO_MAX_BYTES = 100 * 1024 * 1024;
 export const GALLERY_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const GALLERY_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
-// MP4 and MOV share the ISO-BMFF "ftyp" box at byte 4; WebM starts with the EBML header.
-export function detectVideoType(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
-  if (buffer.subarray(4, 8).toString("ascii") === "ftyp") {
-    return buffer.subarray(8, 10).toString("ascii") === "qt" ? "video/quicktime" : "video/mp4";
-  }
-  if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) return "video/webm";
-  return null;
+// First check of a planned upload from what the browser declares; Cloudinary's allowed_formats and the
+// server-side lookup after upload (verifyDirectUpload) check the real file.
+export function galleryUploadKind(mimeType, bytes) {
+  const type = String(mimeType ?? "").toLowerCase();
+  const isImage = GALLERY_IMAGE_TYPES.includes(type);
+  const isVideo = GALLERY_VIDEO_TYPES.includes(type);
+  if (!isImage && !isVideo) return { error: "Upload a JPEG, PNG or WebP image, or an MP4, MOV or WebM video." };
+  const max = isVideo ? GALLERY_VIDEO_MAX_BYTES : GALLERY_IMAGE_MAX_BYTES;
+  if (!(bytes > 0) || bytes > max) return { error: isVideo ? "Video is too large (100 MB maximum)." : "Image is too large (10 MB maximum).", status: 413 };
+  return { kind: isVideo ? "gallery-video" : "gallery-image", mediaType: isVideo ? "video" : "image" };
 }
 
-// Returns { mediaType, mimeType } or an error message for a raw upload body.
-export function classifyGalleryUpload(buffer, declaredType) {
-  const declared = declaredType?.split(";")[0].trim().toLowerCase();
-  if (GALLERY_IMAGE_TYPES.includes(declared)) {
-    if (detectImageType(buffer) !== declared) return { error: "Upload a JPEG, PNG or WebP image." };
-    if (buffer.length > GALLERY_IMAGE_MAX_BYTES) return { error: "Image is too large (10 MB maximum).", status: 413 };
-    return { mediaType: "image", mimeType: declared };
-  }
-  if (GALLERY_VIDEO_TYPES.includes(declared)) {
-    const detected = detectVideoType(buffer);
-    // Browsers label .mov files inconsistently, so any ISO-BMFF video is accepted as MP4/MOV.
-    const matches = detected === declared || (detected && detected !== "video/webm" && declared !== "video/webm");
-    if (!matches) return { error: "Upload an MP4, MOV or WebM video." };
-    if (buffer.length > GALLERY_VIDEO_MAX_BYTES) return { error: "Video is too large (100 MB maximum).", status: 413 };
-    return { mediaType: "video", mimeType: detected };
-  }
-  return { error: "Upload a JPEG, PNG or WebP image, or an MP4, MOV or WebM video." };
-}
+const notConfigured = (res) => res.status(503).json({ status: "error", message: "Media storage (Cloudinary) is not configured on the server." });
 
 const publicFields = ["id", "mediaType", "title", "caption", "url", "posterUrl", "width", "height"];
 const order = [["sortOrder", "ASC"], ["createdAt", "DESC"]];
@@ -61,21 +45,35 @@ export async function listGallery(_req, res) {
   }
 }
 
-export async function uploadGalleryItem(req, res) {
-  if (!isCloudinaryConfigured()) {
-    return res.status(503).json({ status: "error", message: "Media storage (Cloudinary) is not configured on the server." });
-  }
-  const kind = classifyGalleryUpload(req.body, req.headers["content-type"]);
-  if (kind.error) return res.status(kind.status ?? 400).json({ status: "error", message: kind.error });
-  let uploaded;
+// Step 1: sign one direct browser upload to the gallery folder.
+export async function signGalleryUpload(req, res) {
+  if (!isCloudinaryConfigured()) return notConfigured(res);
+  const plan = galleryUploadKind(req.validated.body.mimeType, req.validated.body.bytes);
+  if (plan.error) return res.status(plan.status ?? 400).json({ status: "error", message: plan.error });
   try {
-    uploaded = await uploadGalleryMedia({ buffer: req.body, mimeType: kind.mimeType, mediaType: kind.mediaType });
-    const { title, caption, published } = req.validated.query;
+    return res.json({ status: "success", data: { ...signDirectUpload({ kind: plan.kind }), mediaType: plan.mediaType } });
+  } catch (error) {
+    console.error("Gallery upload signing failed:", error);
+    return res.status(500).json({ status: "error", message: "Unable to prepare the upload." });
+  }
+}
+
+// Step 2: after the browser uploaded to Cloudinary, check the asset in our account and save it.
+export async function createGalleryItem(req, res) {
+  if (!isCloudinaryConfigured()) return notConfigured(res);
+  const { publicId, mediaType, title, caption, published } = req.validated.body;
+  const kind = mediaType === "video" ? "gallery-video" : "gallery-image";
+  try {
+    const checked = await verifyDirectUpload({ kind, publicId });
+    if (checked.error) {
+      if (checked.remove) destroyMediaQuietly(publicId, mediaType);
+      return res.status(checked.status).json({ status: "error", message: checked.error });
+    }
     const item = await sequelize.transaction(async (transaction) => {
       const last = await GalleryItem.max("sortOrder", { transaction });
       return GalleryItem.create({
-        ...uploaded,
-        mediaType: kind.mediaType,
+        ...checked.asset,
+        mediaType,
         title,
         caption: caption || null,
         isPublished: published,
@@ -85,9 +83,9 @@ export async function uploadGalleryItem(req, res) {
     });
     return res.status(201).json({ status: "success", data: item });
   } catch (error) {
-    console.error("Gallery upload failed:", error);
-    if (uploaded) await destroyMediaQuietly(uploaded.publicId, kind.mediaType);
-    return res.status(502).json({ status: "error", message: "Unable to upload to media storage. Try again." });
+    if (error.name === "SequelizeUniqueConstraintError") return res.status(409).json({ status: "error", message: "This upload is already in the gallery." });
+    console.error("Gallery save failed:", error);
+    return res.status(502).json({ status: "error", message: "Unable to check the upload with media storage. Try again." });
   }
 }
 

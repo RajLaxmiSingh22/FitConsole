@@ -1,13 +1,17 @@
 # FitConsole
 
+[![CI](https://github.com/RajLaxmiSingh22/FitConsole/actions/workflows/ci.yml/badge.svg)](https://github.com/RajLaxmiSingh22/FitConsole/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**Live demo:** _coming soon_. The link will be added here once the app is deployed (see [Deployment](#deployment)).
+
 FitConsole is a full-stack gym management application for owners, trainers, and clients. It brings course and membership administration, attendance, payments, trainer-reviewed diet plans, and member communication into one web application.
 
 The repository contains two independent JavaScript projects: an Express API and a React web client. They have separate dependency manifests and lockfiles; there is no root npm workspace or Docker setup.
 
 ## Features
 
-- Role-based owner, trainer, and client accounts with JWT authentication.
-- Client and trainer profiles, trainer assignment, configurable courses, and 1-, 3-, 6-, and 12-month course plans.
+- Role-based owner, trainer, and client accounts with secure cookie sessions with CSRF protection.
+- Client and trainer profiles, trainer assignment, configurable courses, and 1-, 2-, 3-, 6-, and 12-month course plans.
 - Membership enrollment and renewal, manual payment records, and Cashfree checkout with server-side payment verification before recording a successful payment.
 - Attendance check-ins and client attendance history.
 - Client diet and progress tracking; optional Gemini-generated diet-plan drafts that trainers can review and approve.
@@ -17,12 +21,27 @@ The repository contains two independent JavaScript projects: an Express API and 
 - Owner-only website lead management with activity history, trial status tracking, and eligible lead-to-member conversion.
 - Rate-limited password-reset requests with hashed, expiring, single-use reset tokens and SMTP email delivery (for example Gmail).
 
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Public home page](docs/screenshots/01-home.png) | ![Public programs page with course covers](docs/screenshots/02-programs.png) |
+| Public home page | Programs with course covers |
+| ![Owner dashboard](docs/screenshots/03-owner-dashboard.png) | ![Owner courses and pricing](docs/screenshots/04-owner-courses.png) |
+| Owner dashboard | Courses & pricing |
+| ![Owner member analytics](docs/screenshots/05-owner-member-analytics.png) | ![Owner documentation with the generated endpoint directory](docs/screenshots/06-owner-docs.png) |
+| Member analytics | Owner documentation (generated API directory) |
+| ![Member membership and payments](docs/screenshots/07-member-membership.png) | |
+| Member: membership & payments | |
+
+Screenshots use the fictional demo gym data from `npm run seed:demo-gym`.
+
 ## Architecture and technology
 
 | Area | Technologies |
 | --- | --- |
 | Frontend | React, Vite, Cashfree browser SDK |
-| Backend | Node.js, Express, Joi, JWT, Argon2 |
+| Backend | Node.js, Express, Joi, Argon2, signed httpOnly session cookies with CSRF protection |
 | Persistence | PostgreSQL, Sequelize |
 | Optional integrations | Cashfree Payments, Google Gemini, SMTP email (Nodemailer), ExcelJS |
 
@@ -147,6 +166,45 @@ npm run build
 
 The frontend currently has no test or lint script. Backend tests cover selected helpers, configuration, and validation; they do not provide comprehensive HTTP, database, authorization, or payment-provider integration coverage.
 
+## Deployment
+
+### Frontend and API must share one site
+
+Sessions use `SameSite=Strict` cookies, so the browser only sends them when the page and the API belong to the **same site** (the same registrable domain). Host them as two subdomains of one domain you own:
+
+| Part | Example | Notes |
+| --- | --- | --- |
+| Frontend (static files from `Frontend/dist`) | `https://app.example.com` | Built with `VITE_API_URL=https://api.example.com/api` |
+| API (`node src/server.js`) | `https://api.example.com` | Behind HTTPS (a reverse proxy or the host's load balancer) |
+
+Do **not** put the frontend and API on two different hosting domains (for example `myapp.vercel.app` and `myapi.onrender.com`): those are different sites, the session cookie is never sent, and every signed-in request fails with 401. Serving both from one domain (for example `example.com` for the app and `example.com/api` through a proxy) also works.
+
+### Production settings
+
+Set these in the API's environment (see `Backend/.env.example` for the full list):
+
+| Variable | Production value | Why |
+| --- | --- | --- |
+| `NODE_ENV` | `production` | Turns on production checks (HTTPS links, secure cookies by default). |
+| `COOKIE_SECURE` | `true` (default in production) | Cookies are only sent over HTTPS. Never set `false` in production. |
+| `CORS_ORIGIN` | `https://app.example.com` | The exact frontend origin(s), comma-separated; credentials are only accepted from these. |
+| `TRUST_PROXY_HOPS` | `1` behind one reverse proxy / load balancer (0–5) | Lets the API see the real client IP and HTTPS for rate limits and secure cookies. Leave `0` when nothing sits in front of Node. |
+| `FRONTEND_PUBLIC_URL` | `https://app.example.com` | Links in emails (password reset, reminders); must be HTTPS in production. |
+| `CASHFREE_RETURN_URL` | `https://app.example.com/` | Where Cashfree sends members back after paying. |
+| `JWT_SECRET` | A long random secret (32+ characters) | Signs session cookies; changing it signs everyone out. |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Your PostgreSQL | Migrations run automatically on start. |
+| `OWNER_EMAIL`, `OWNER_PASSWORD` | The owner account | Provisioned on start. |
+| `RUN_JOBS` | `true` on one instance | Daily reconciliation and reminder emails. |
+| `CLOUDINARY_URL`, `SMTP_*`, `CASHFREE_*`, `GEMINI_*` | Optional integrations | Each feature is switched off when its settings are missing. |
+
+Build the frontend with the API URL baked in:
+
+```sh
+cd Frontend && VITE_API_URL=https://api.example.com/api VITE_CASHFREE_MODE=production npm run build
+```
+
+Note that public rate limits are kept in memory per process; run one API instance (or add a shared store) before scaling out.
+
 ## Current limitations and release considerations
 
 - The schema is migration-only, starting from the 2026-10-29 baseline. Databases created before the first versioned migration (by `sequelize.sync()` alone) must be upgraded with commit `a59d7ee` before this release. Run migrations against a backup or staging database first.
@@ -216,4 +274,8 @@ All demo accounts use `@demo.fitconsole.example.com` addresses, so no real inbox
 
 Never commit `.env` files, API keys, database credentials, tokens, private keys, database backups, private PDFs, or generated test artifacts. Use the reviewed `.env.example` templates as a starting point and rotate any credential that has been exposed.
 
-The current backend dependency audit still reports three moderate findings associated with transitive `uuid@8.3.2` use by Sequelize and ExcelJS. The available `npm audit fix --force` recommendation downgrades those packages across major versions; that breaking change was not applied without compatibility verification.
+`npm audit` reports no high or critical findings. Two moderate findings remain in `minimatch`, used only by the development file watcher `nodemon`; npm's suggested fix is a downgrade, so it was not applied.
+
+## License
+
+FitConsole is released under the [MIT License](LICENSE). Copyright (c) 2026 RajLaxmiSingh22.

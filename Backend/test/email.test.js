@@ -81,3 +81,19 @@ test("membership reminders go out once per membership and are retried after a fa
   assert.deepEqual(sent.map(([to]) => to), ["a@example.com", "b@example.com"]);
   assert.deepEqual(await sendMembershipEndingReminders({ ...options, configured: false }), { sent: 0, skipped: 0, failed: 0 });
 });
+
+test("sendEmail builds a real message with nodemailer (no network)", async () => {
+  const nodemailer = (await import("nodemailer")).default;
+  const previous = { ...process.env };
+  Object.assign(process.env, { SMTP_HOST: "smtp.example.com", SMTP_PORT: "587", SMTP_USER: "u", SMTP_PASSWORD: "p", EMAIL_FROM: "FitConsole <no-reply@example.com>" });
+  try {
+    const info = await sendEmail("member@example.com", { subject: "Reset ₹", text: "Plain", html: "<p>Html</p>" }, { transport: nodemailer.createTransport({ jsonTransport: true }) });
+    const message = JSON.parse(info.message);
+    assert.equal(message.to[0].address, "member@example.com");
+    assert.equal(message.subject, "Reset ₹");
+    assert.equal(message.text, "Plain");
+    assert.equal(message.html, "<p>Html</p>");
+  } finally {
+    process.env = previous;
+  }
+});
