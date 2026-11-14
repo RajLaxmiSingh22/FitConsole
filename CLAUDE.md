@@ -51,7 +51,7 @@
 Run commands from the corresponding package directory:
 
 ```sh
-cd Backend && npm test
+cd Backend && npm test   # no .env needed; set TEST_DATABASE_URL (a disposable Postgres) to also run the database tests
 cd Backend && npm run migrate
 cd Backend && npm run audit:routes   # every route × role × CSRF on a throwaway database
 cd Backend && npm run docs:generate  # rebuild the /docs endpoint directory from the routes
