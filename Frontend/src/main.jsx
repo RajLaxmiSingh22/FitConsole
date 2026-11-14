@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./rupeeFont.css";
 import "./styles.css";
 import App from "./App.jsx";
 

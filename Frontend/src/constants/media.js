@@ -12,8 +12,13 @@ const TILES = { combat: [0, 0], conditioning: [800, 0], kids: [0, 450], strength
 export const defaultCoverKeys = Object.keys(TILES);
 export const defaultCoverLabels = { combat: "Combat", conditioning: "Conditioning", kids: "Kids", strength: "Strength" };
 
+// Covers drawn as their own images (replacing that tile of the sheet). Combat is an impact starburst.
+const STANDALONE = { combat: "v1794673116/fitconsole/site/covers/combat.png" };
+
 export function defaultCoverUrl(key) {
-  const [x, y] = TILES[key] ?? TILES.combat;
+  const name = TILES[key] ? key : "combat";
+  if (STANDALONE[name]) return `${CLOUDINARY}/image/upload/c_fill,w_800,h_450/f_auto,q_auto/${STANDALONE[name]}`;
+  const [x, y] = TILES[name];
   return `${CLOUDINARY}/image/upload/c_crop,x_${x},y_${y},w_800,h_450/f_auto,q_auto/${SHEET}`;
 }
 

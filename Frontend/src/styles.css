@@ -1,9 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap");
-/* DM Sans and DM Mono have no rupee sign; this loads only the ₹ glyph from Noto Sans as a fallback. */
-@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&text=%E2%82%B9&display=swap");
 
 :root {
-  font-family: "DM Sans", "Noto Sans", sans-serif;
+  font-family: "Rupee Fallback", "DM Sans", sans-serif;
   color: #f3f1ed;
   background: #101111;
   font-synthesis: none;
@@ -21,8 +19,8 @@
   --green: #b6e65f;
   --yellow: #f1bc50;
   --pink: #e77aa8;
-  --mono: "DM Mono", "Noto Sans", monospace;
-  --display: "Barlow Condensed", "Noto Sans", Impact, sans-serif;
+  --mono: "Rupee Fallback", "DM Mono", monospace;
+  --display: "Rupee Fallback", "Barlow Condensed", Impact, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -1231,6 +1229,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; backgr
 
 /* Analytics — validated chart palette (dark surface #181919): blue, orange, aqua */
 :root { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-grid: #2a2c2b; --viz-axis: #7d807c; }
+/* Brand chart colours (Member Analytics): red main bars, lime highlights. */
+:root { --viz-brand: #D9443A; --viz-highlight: #C6F06B; }
 .viz { margin: 0; }
 .viz-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 8px; color: var(--muted); font-size: 11px; }
 .viz-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -1723,3 +1723,26 @@ button, input, select, textarea { font-family: inherit; }
 .upload-progress::-webkit-progress-bar { background: #2a2c2c; }
 .upload-progress::-webkit-progress-value { background: var(--red); }
 .upload-progress::-moz-progress-bar { background: var(--red); }
+
+/* Programs page: one card style, equal heights, prices and buttons aligned at the bottom */
+.program-grid { align-items: stretch; }
+.program-grid .program-card { display: flex; flex-direction: column; gap: 14px; min-height: 0; padding-top: 0; border-top: 0; }
+.program-grid .program-card--cover::before { content: ""; position: absolute; inset: 0 0 auto; z-index: 1; height: 4px; background: var(--tone); }
+.program-grid .program-tag { align-self: flex-start; }
+.program-grid .program-card > p { margin: 0; }
+.program-grid .program-facts { margin-top: auto; }
+.program-grid .program-facts dd { display: flex; justify-content: flex-end; }
+.program-grid .program-foot { margin-top: 0; }
+.program-grid .avatar--stack { width: 28px; height: 28px; flex-basis: 28px; font-size: 10px; border-color: var(--surface); }
+.program-card--trial { grid-column: span var(--slots, 1); justify-content: center; padding: 32px 30px 28px; border: 1px dashed #ec362f80; background: radial-gradient(120% 90% at 0% 0%, #ec362f1f, transparent 60%), var(--surface); }
+.program-grid .program-card--trial { padding-top: 32px; }
+.program-card--trial .program-foot { margin-top: auto; border-top: 0; }
+.program-trial-mark { display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid #ec362f80; border-radius: 50%; color: var(--red); font-family: var(--display); font-size: 30px; }
+/* 2 columns (≤900px): show the trial card only when it fills the empty slot (odd count). 1 column: always. */
+@media (max-width: 900px) {
+  .program-card--trial { grid-column: span 1; }
+  .program-card--trial:not([data-odd]) { display: none; }
+}
+@media (max-width: 600px) {
+  .program-card--trial:not([data-odd]) { display: flex; }
+}

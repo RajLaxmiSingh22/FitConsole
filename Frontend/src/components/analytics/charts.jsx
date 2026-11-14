@@ -22,14 +22,16 @@ function Tooltip({ point }) {
 }
 
 // Bars for one measure, with an optional target tick per bar (for example scheduled sessions).
-export function BarChart({ data, value, target, label, targetLabel, format = (v) => v, color = "var(--viz-1)", ariaLabel }) {
+// `highlight(row)` marks bars drawn in `highlightColor`; `highlightLabel` names them in the legend and tooltip,
+// so the meaning never depends on colour alone.
+export function BarChart({ data, value, target, label, targetLabel, format = (v) => v, color = "var(--viz-1)", highlight, highlightColor = "var(--viz-highlight)", highlightLabel, ariaLabel }) {
   const [hover, setHover] = useState(null);
   const max = niceMax(Math.max(1, ...data.map((row) => Math.max(row[value] ?? 0, target ? row[target] ?? 0 : 0))));
   const slot = innerW / Math.max(1, data.length);
   const barW = Math.min(28, slot * 0.6);
   const y = (v) => PAD.top + innerH - (v / max) * innerH;
   return <figure className="viz">
-    {target && <figcaption className="viz-legend"><span><i style={{ background: color }} />{label}</span><span><i className="viz-tick-swatch" />{targetLabel}</span></figcaption>}
+    {(target || highlight) && <figcaption className="viz-legend"><span><i style={{ background: color }} />{label}</span>{highlight && highlightLabel && <span><i style={{ background: highlightColor }} />{highlightLabel}</span>}{target && <span><i className="viz-tick-swatch" />{targetLabel}</span>}</figcaption>}
     <div className="viz-frame">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel} onMouseLeave={() => setHover(null)}>
         {[0, 0.5, 1].map((t) => <g key={t}><line className="viz-grid" x1={PAD.left} x2={W - PAD.right} y1={y(max * t)} y2={y(max * t)} /><text className="viz-axis" x={PAD.left - 6} y={y(max * t) + 3} textAnchor="end">{Math.round(max * t)}</text></g>)}
@@ -38,9 +40,11 @@ export function BarChart({ data, value, target, label, targetLabel, format = (v)
           const v = row[value] ?? 0;
           const top = y(v);
           const height = Math.max(0, PAD.top + innerH - top);
-          return <g key={row.key} onMouseEnter={() => setHover({ x: cx, y: Math.min(top, target ? y(row[target] ?? 0) : top), title: row.label, rows: [[label, format(v), color], ...(target ? [[targetLabel, format(row[target] ?? 0)]] : [])] })}>
+          const marked = Boolean(highlight?.(row));
+          const fill = marked ? highlightColor : color;
+          return <g key={row.key} onMouseEnter={() => setHover({ x: cx, y: Math.min(top, target ? y(row[target] ?? 0) : top), title: marked && highlightLabel ? `${row.label} · ${highlightLabel}` : row.label, rows: [[label, format(v), fill], ...(target ? [[targetLabel, format(row[target] ?? 0)]] : [])] })}>
             <rect className="viz-hit" x={cx - slot / 2} y={PAD.top} width={slot} height={innerH} />
-            {height > 0 && <path d={`M${cx - barW / 2},${PAD.top + innerH} V${top + Math.min(4, height)} Q${cx - barW / 2},${top} ${cx - barW / 2 + Math.min(4, height)},${top} H${cx + barW / 2 - Math.min(4, height)} Q${cx + barW / 2},${top} ${cx + barW / 2},${top + Math.min(4, height)} V${PAD.top + innerH} Z`} fill={color} opacity={hover && hover.title !== row.label ? 0.55 : 1} />}
+            {height > 0 && <path d={`M${cx - barW / 2},${PAD.top + innerH} V${top + Math.min(4, height)} Q${cx - barW / 2},${top} ${cx - barW / 2 + Math.min(4, height)},${top} H${cx + barW / 2 - Math.min(4, height)} Q${cx + barW / 2},${top} ${cx + barW / 2},${top + Math.min(4, height)} V${PAD.top + innerH} Z`} fill={fill} opacity={hover && hover.title !== row.label ? 0.55 : 1} />}
             {target && row[target] > 0 && <line className="viz-tick" x1={cx - barW / 2 - 4} x2={cx + barW / 2 + 4} y1={y(row[target])} y2={y(row[target])} />}
             {(data.length <= 14 || index % Math.ceil(data.length / 10) === 0) && <text className="viz-axis" x={cx} y={H - 8} textAnchor="middle">{row.short ?? row.label}</text>}
           </g>;
