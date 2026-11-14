@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Button, Card, EmptyState, Field, LoadingState, Notice, PageHeader, StatusPill } from "../../components/ui/index.js";
 import { useLoad } from "../../hooks/useLoad.js";
 import { apiCalls, getApiError, responseData } from "../../services/api.js";
+import { uploadToCloudinary } from "../../services/cloudinaryUpload.js";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm";
 const IMAGE_MAX = 10 * 1024 * 1024;
@@ -43,6 +44,7 @@ export default function GalleryManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [progress, setProgress] = useState(null);
   const items = gallery.data?.items ?? [];
 
   async function run(action, done) {
@@ -76,7 +78,17 @@ export default function GalleryManager() {
 
   async function upload(event) {
     event.preventDefault();
-    const ok = await run(() => apiCalls.gallery.upload(file, { title: title.trim(), caption: caption.trim(), published }), "Uploaded.");
+    // The file goes straight from this browser to Cloudinary; the API signs the upload and then checks it.
+    const ok = await run(async () => {
+      setProgress(0);
+      try {
+        const signed = responseData(await apiCalls.gallery.signUpload(file));
+        const uploaded = await uploadToCloudinary(file, signed, setProgress);
+        await apiCalls.gallery.create({ publicId: uploaded.public_id, mediaType: signed.mediaType, title: title.trim(), caption: caption.trim(), published });
+      } finally {
+        setProgress(null);
+      }
+    }, "Uploaded.");
     if (ok) { setFile(null); setTitle(""); setCaption(""); }
   }
 
@@ -104,7 +116,8 @@ export default function GalleryManager() {
         <Field label="Title *"><input value={title} maxLength={80} onChange={(event) => setTitle(event.target.value)} required minLength={2} /></Field>
         <Field label="Caption"><input value={caption} maxLength={160} onChange={(event) => setCaption(event.target.value)} /></Field>
         <label className="gallery-upload-check"><input type="checkbox" checked={published} onChange={(event) => setPublished(event.target.checked)} /> Show on the website right away</label>
-        <Button type="submit" disabled={busy || !file || title.trim().length < 2 || !storageReady}>{busy && file ? "Uploading…" : "Upload"}</Button>
+        {progress !== null && <progress className="upload-progress" max="100" value={progress} aria-label="Upload progress">{progress}%</progress>}
+        <Button type="submit" disabled={busy || !file || title.trim().length < 2 || !storageReady}>{progress !== null ? `Uploading… ${progress}%` : busy && file ? "Saving…" : "Upload"}</Button>
       </form>
     </Card>
     <Notice error={error} />{message && <Notice tone="success" error={message} />}

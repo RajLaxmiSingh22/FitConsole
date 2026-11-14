@@ -46,7 +46,8 @@ export const updateCourseSchema = stripUnknownFields(Joi.object({
   coverDefault: Joi.string().valid("combat", "conditioning", "kids", "strength").allow(null),
 }).min(1));
 
-export const courseCoverQuerySchema = stripUnknownFields(Joi.object({
+export const courseCoverSaveSchema = stripUnknownFields(Joi.object({
+  publicId: Joi.string().max(255).pattern(/^[A-Za-z0-9_\-/]+$/).required(),
   alt: Joi.string().trim().max(200).allow(""),
 }));
 

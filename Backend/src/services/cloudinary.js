@@ -7,6 +7,8 @@ import { createHash, randomUUID } from "node:crypto";
 //   <root>/gallery/images/<random>                                   gallery photos
 //   <root>/gallery/videos/<random>                                   gallery videos
 //   <root>/courses/<courseId>/<random>                               course covers (1200x675 WebP)
+// Gallery files and course covers are uploaded by the browser directly to Cloudinary with a signature
+// from this server (see signDirectUpload / verifyDirectUpload below).
 //   <root>/site/...                                                  site design assets
 
 const ROLE_FOLDERS = new Set(["owner", "trainer", "client"]);
@@ -86,36 +88,92 @@ export async function uploadAvatarImage({ buffer, mimeType, role, userId }) {
   return { publicId: result.public_id, url: result.secure_url };
 }
 
-export async function uploadGalleryMedia({ buffer, mimeType, mediaType }) {
-  const config = requireConfig();
-  const result = await callCloudinary(config, mediaType, "upload", {
-    folder: galleryFolder(config.root, mediaType),
+// ---------- Direct browser uploads (gallery and course covers) ----------
+// The server signs one upload for one exact folder + random public_id; the browser sends the file straight
+// to Cloudinary, so large files never pass through the API. Afterwards the server looks the asset up in
+// our own Cloudinary account and checks folder, type, format and size before saving anything.
+
+export const DIRECT_UPLOAD_KINDS = {
+  "gallery-image": { resourceType: "image", formats: ["jpg", "png", "webp"], maxBytes: 10 * 1024 * 1024 },
+  "gallery-video": { resourceType: "video", formats: ["mp4", "mov", "webm"], maxBytes: 100 * 1024 * 1024 },
+  // Covers are cropped to 16:9 and stored as WebP on upload; re-encoding also drops EXIF/GPS metadata.
+  // f_webp must sit inside the transformation: Cloudinary ignores `format` when allowed_formats is set.
+  "course-cover": { resourceType: "image", formats: ["jpg", "png", "webp"], maxBytes: 5 * 1024 * 1024, transformation: "c_fill,g_auto,w_1200,h_675,f_webp", format: "webp" },
+};
+
+export function directUploadFolder(root, kind, courseId) {
+  if (kind === "course-cover") return `${root}/courses/${courseId}`;
+  return galleryFolder(root, kind === "gallery-video" ? "video" : "image");
+}
+
+// Parameters the browser posts to Cloudinary together with the file. Everything except the file is signed.
+export function signDirectUpload({ kind, courseId }, { config = requireConfig(), now = Date.now() } = {}) {
+  const spec = DIRECT_UPLOAD_KINDS[kind];
+  if (!spec) throw new Error(`Unknown upload kind ${kind}`);
+  const folder = directUploadFolder(config.root, kind, courseId);
+  const params = {
+    folder,
     public_id: randomUUID(),
     overwrite: "false",
-  }, { buffer, mimeType });
+    allowed_formats: spec.formats.join(","),
+    timestamp: Math.floor(now / 1000),
+    ...(spec.transformation ? { transformation: spec.transformation } : {}),
+    ...(spec.format ? { format: spec.format } : {}),
+  };
   return {
-    publicId: result.public_id,
-    url: result.secure_url,
-    // Cloudinary renders a still frame for any video when the extension is swapped to .jpg.
-    posterUrl: mediaType === "video" ? result.secure_url.replace(/\.[a-z0-9]+$/i, ".jpg") : null,
-    width: result.width ?? null,
-    height: result.height ?? null,
-    bytes: result.bytes ?? null,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/${spec.resourceType}/upload`,
+    fields: { ...params, api_key: config.apiKey, signature: signParams(params, config.apiSecret) },
+    publicIdPrefix: `${folder}/`,
+    maxBytes: spec.maxBytes,
   };
 }
 
-// Course covers are cropped to 16:9 (1200x675) and stored as WebP. Cloudinary re-encodes the
-// image on upload, which also drops EXIF metadata such as phone GPS locations.
-export async function uploadCourseCover({ buffer, mimeType, courseId }) {
-  const config = requireConfig();
-  const result = await callCloudinary(config, "image", "upload", {
-    folder: `${config.root}/courses/${courseId}`,
-    public_id: randomUUID(),
-    overwrite: "false",
-    transformation: "c_fill,g_auto,w_1200,h_675",
-    format: "webp",
-  }, { buffer, mimeType });
-  return { publicId: result.public_id, url: result.secure_url };
+// Admin API lookup in our own account; null when the asset does not exist.
+export async function fetchAsset(publicId, resourceType, { config = requireConfig(), fetchImpl = fetch } = {}) {
+  const url = `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/resources/${resourceType}/upload/${publicId.split("/").map(encodeURIComponent).join("/")}`;
+  const response = await fetchImpl(url, {
+    headers: { Authorization: `Basic ${Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString("base64")}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (response.status === 404) return null;
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) throw new Error(`Cloudinary lookup failed (${response.status}): ${body.error?.message ?? "no details"}`);
+  return body;
+}
+
+// Checks an asset the browser says it uploaded. Returns { asset } or { error }; on a bad asset that does
+// exist in our folder, the caller should delete it.
+export async function verifyDirectUpload({ kind, courseId, publicId }, { config = requireConfig(), fetchImpl = fetch } = {}) {
+  const spec = DIRECT_UPLOAD_KINDS[kind];
+  const folder = directUploadFolder(config.root, kind, courseId);
+  const name = typeof publicId === "string" && publicId.startsWith(`${folder}/`) ? publicId.slice(folder.length + 1) : "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(name)) {
+    return { error: "That upload does not belong to this gallery or course.", status: 400 };
+  }
+  const asset = await fetchAsset(publicId, spec.resourceType, { config, fetchImpl });
+  if (!asset) return { error: "The uploaded file was not found. Upload it again.", status: 400 };
+  if (asset.public_id !== publicId || asset.resource_type !== spec.resourceType || asset.type !== "upload") {
+    return { error: "That upload does not belong to this gallery or course.", status: 400, remove: true };
+  }
+  // When a format is required (covers), it proves the crop/re-encode ran; otherwise the upload's own format must be allowed.
+  const format = String(asset.format).toLowerCase();
+  if (spec.format ? format !== spec.format : !spec.formats.includes(format)) {
+    return { error: "Upload a supported file type.", status: 400, remove: true };
+  }
+  if (!(asset.bytes > 0) || asset.bytes > spec.maxBytes) {
+    return { error: `The file is too large (${Math.round(spec.maxBytes / 1024 / 1024)} MB maximum).`, status: 413, remove: true };
+  }
+  return {
+    asset: {
+      publicId: asset.public_id,
+      url: asset.secure_url,
+      // Cloudinary renders a still frame for any video when the extension is swapped to .jpg.
+      posterUrl: spec.resourceType === "video" ? asset.secure_url.replace(/\.[a-z0-9]+$/i, ".jpg") : null,
+      width: asset.width ?? null,
+      height: asset.height ?? null,
+      bytes: asset.bytes ?? null,
+    },
+  };
 }
 
 export async function destroyMedia(publicId, resourceType = "image") {
