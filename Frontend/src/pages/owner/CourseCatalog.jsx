@@ -4,22 +4,8 @@ import { courseCover } from "../../constants/media.js";
 import CourseEditPanel from "./CourseEditPanel.jsx";
 import { durations } from "../../constants/memberships.js";
 import { apiCalls, getApiError } from "../../services/api.js";
+import { planErrors } from "../../utils/coursePrices.js";
 import { currency } from "../../utils/format.js";
-
-// Per-field price problems: each price > 0, and no longer plan cheaper than the one before it.
-function planErrors(values) {
-  const errors = {};
-  let previous = null;
-  for (const { months, label } of durations) {
-    const raw = values[months];
-    if (raw === "" || raw == null) continue;
-    const price = Number(raw);
-    if (!Number.isFinite(price) || price <= 0) { errors[months] = "Must be greater than 0."; continue; }
-    if (previous && price < previous.price) errors[months] = `Must be at least the ${previous.label} price.`;
-    previous = { price, label };
-  }
-  return errors;
-}
 
 export default function CourseCatalog({ courses, trainers, refresh }) {
   const [showForm, setShowForm] = useState(false);

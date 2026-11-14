@@ -59,7 +59,7 @@ cd Backend && npm run docs:generate  # rebuild the /docs endpoint directory from
 cd Frontend && npm run build
 ```
 
-Development commands are `npm run dev` in each package. The backend requires PostgreSQL and configured values from `Backend/.env`; `Backend/.env.example` lists the expected settings. Password reset additionally needs SMTP settings and an HTTPS frontend URL in production. The frontend uses `Frontend/.env.example` for public Vite configuration. There is no frontend test or lint script in the inspected package manifest.
+Development commands are `npm run dev` in each package. The backend requires PostgreSQL and configured values from `Backend/.env`; `Backend/.env.example` lists the expected settings. Password reset additionally needs SMTP settings and an HTTPS frontend URL in production. The frontend uses `Frontend/.env.example` for public Vite configuration. The frontend has `npm test` (Node's test runner over `src/**/*.test.js`, for pure helpers such as `utils/coursePrices.js`); there is no lint script.
 
 ## Documentation rule
 

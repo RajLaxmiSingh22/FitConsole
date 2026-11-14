@@ -39,3 +39,14 @@ test("longer plans may not cost less than shorter ones", () => {
   assert.ok(updateCourseSchema.validate({ plans: bad }).error);
   assert.equal(planPriceOrderError(ok), null);
 });
+
+test("price order covers all five durations, including 2 months, on create and update", () => {
+  const all = [1, 2, 3, 6, 12].map((durationMonths, index) => ({ durationMonths, price: 1000 * (index + 1) }));
+  assert.equal(createCourseSchema.validate(course(all)).error, undefined);
+  assert.equal(updateCourseSchema.validate({ plans: all }).error, undefined);
+  // Equal prices are allowed; gaps compare with the nearest shorter plan.
+  assert.equal(createCourseSchema.validate(course([{ durationMonths: 1, price: 900 }, { durationMonths: 2, price: 900 }, { durationMonths: 12, price: 900 }])).error, undefined);
+  assert.match(createCourseSchema.validate(course([{ durationMonths: 1, price: 1000 }, { durationMonths: 2, price: 999 }])).error.message, /2-month price must be at least the 1-month price/);
+  assert.match(updateCourseSchema.validate({ plans: [{ durationMonths: 6, price: 6000 }, { durationMonths: 12, price: 5999 }, { durationMonths: 1, price: 1000 }] }).error.message, /12-month price must be at least the 6-month price/);
+  assert.ok(updateCourseSchema.validate({ plans: [{ durationMonths: 2, price: 0 }] }).error);
+});

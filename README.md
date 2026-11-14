@@ -25,14 +25,14 @@ The repository contains two independent JavaScript projects: an Express API and 
 
 | | |
 | --- | --- |
-| ![Public home page](docs/screenshots/01-home.png) | ![Public programs page with course covers](docs/screenshots/02-programs.png) |
-| Public home page | Programs with course covers |
-| ![Owner dashboard](docs/screenshots/03-owner-dashboard.png) | ![Owner courses and pricing](docs/screenshots/04-owner-courses.png) |
-| Owner dashboard | Courses & pricing |
-| ![Owner member analytics](docs/screenshots/05-owner-member-analytics.png) | ![Owner documentation with the generated endpoint directory](docs/screenshots/06-owner-docs.png) |
-| Member analytics | Owner documentation (generated API directory) |
-| ![Member membership and payments](docs/screenshots/07-member-membership.png) | |
-| Member: membership & payments | |
+| ![Public home page with the animated hero](docs/screenshots/01-home.png) | ![Programs page: course covers, coach avatars and a free-trial card](docs/screenshots/02-programs.png) |
+| Public home page: animated hero and "Open now" status | Programs: one card style, aligned prices, free-trial card |
+| ![Owner dashboard](docs/screenshots/03-owner-dashboard.png) | ![Owner courses with cover images and coach avatars](docs/screenshots/04-owner-courses.png) |
+| Owner dashboard: members, payments and check-ins | Courses: covers, prices by duration, coaches |
+| ![Owner member analytics in brand colours](docs/screenshots/05-owner-member-analytics.png) | ![Owner documentation with the generated endpoint directory](docs/screenshots/06-owner-docs.png) |
+| Member analytics: red bars, busiest bar in lime | Owner documentation: endpoint directory generated from the routes |
+| ![Member plan picker with a plan selected](docs/screenshots/07-member-membership.png) | |
+| Member: choosing a plan and paying | |
 
 Screenshots use the fictional demo gym data from `npm run seed:demo-gym`.
 
