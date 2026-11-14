@@ -1,11 +1,12 @@
 import { destroyMediaQuietly, isCloudinaryConfigured, signDirectUpload, verifyDirectUpload } from "../services/cloudinary.js";
 import { sequelize } from "../database.js";
-import { Course, CoursePlan, Trainer, TrainerDetails, User, UserStatus } from "../models/index.js";
+import { Course, CoursePlan, Trainer, TrainerDetails, User, UserAvatar, UserStatus } from "../models/index.js";
 
 const courseIncludes = [{ model: CoursePlan }, {
   model: Trainer,
   include: [
-    { model: User, attributes: ["id", "fullName"] },
+    // The photo version lets course cards show coach photos (coach avatars are public).
+    { model: User, attributes: ["id", "fullName"], include: [{ model: UserAvatar, attributes: ["userId", "updatedAt"] }] },
     { model: TrainerDetails, attributes: ["userId", "experienceYears"] },
   ],
   attributes: ["userId", "certification"],

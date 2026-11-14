@@ -1721,3 +1721,26 @@ button, input, select, textarea { font-family: inherit; }
 .upload-progress::-webkit-progress-bar { background: #2a2c2c; }
 .upload-progress::-webkit-progress-value { background: var(--red); }
 .upload-progress::-moz-progress-bar { background: var(--red); }
+
+/* Programs page: one card style, equal heights, prices and buttons aligned at the bottom */
+.program-grid { align-items: stretch; }
+.program-grid .program-card { display: flex; flex-direction: column; gap: 14px; min-height: 0; padding-top: 0; border-top: 0; }
+.program-grid .program-card--cover::before { content: ""; position: absolute; inset: 0 0 auto; z-index: 1; height: 4px; background: var(--tone); }
+.program-grid .program-tag { align-self: flex-start; }
+.program-grid .program-card > p { margin: 0; }
+.program-grid .program-facts { margin-top: auto; }
+.program-grid .program-facts dd { display: flex; justify-content: flex-end; }
+.program-grid .program-foot { margin-top: 0; }
+.program-grid .avatar--stack { width: 28px; height: 28px; flex-basis: 28px; font-size: 10px; border-color: var(--surface); }
+.program-card--trial { grid-column: span var(--slots, 1); justify-content: center; padding: 32px 30px 28px; border: 1px dashed #ec362f80; background: radial-gradient(120% 90% at 0% 0%, #ec362f1f, transparent 60%), var(--surface); }
+.program-grid .program-card--trial { padding-top: 32px; }
+.program-card--trial .program-foot { margin-top: auto; border-top: 0; }
+.program-trial-mark { display: grid; place-items: center; width: 52px; height: 52px; border: 1px solid #ec362f80; border-radius: 50%; color: var(--red); font-family: var(--display); font-size: 30px; }
+/* 2 columns (≤900px): show the trial card only when it fills the empty slot (odd count). 1 column: always. */
+@media (max-width: 900px) {
+  .program-card--trial { grid-column: span 1; }
+  .program-card--trial:not([data-odd]) { display: none; }
+}
+@media (max-width: 600px) {
+  .program-card--trial:not([data-odd]) { display: flex; }
+}
