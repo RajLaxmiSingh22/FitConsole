@@ -1766,3 +1766,20 @@ button, input, select, textarea { font-family: inherit; }
   .pricing-grid > .pricing-card { flex-basis: 78%; scroll-snap-align: center; }
   .pricing-grid > .pricing-card.is-best { transform: none; }
 }
+
+/* Landing "Pick your fight": cover on top, body below; number overlays the cover */
+.fight-card { padding: 0; gap: 0; justify-content: flex-start; }
+.fight-cover { position: relative; height: 160px; overflow: hidden; border-bottom: 1px solid var(--line); background: #141414; }
+.fight-cover img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.2, .7, .2, 1); }
+.fight-card:hover .fight-cover img { transform: scale(1.05); }
+.fight-cover::after { content: ""; position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, #1b1a1a); pointer-events: none; }
+.fight-cover .fight-number { position: absolute; top: 6px; right: 10px; z-index: 1; color: #ffffffb3; font-size: 56px; text-shadow: 0 2px 14px #000a; transition: none; }
+.fight-card:hover .fight-cover .fight-number { color: #ffffffb3; }
+.fight-body { display: grid; gap: 10px; padding: 18px 22px 22px; }
+.fight-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fight-tag { padding: 4px 10px; border: 1px solid #ec362f66; border-radius: 999px; background: #ec362f1a; color: var(--red); font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+.fight-tags .fight-level { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.fight-card h3 { margin: 0; font-size: 34px; }
+.fight-card .fight-body > p { display: -webkit-box; margin: 0; overflow: hidden; color: #a8a39c; font-size: 13px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.fight-card > a { position: static; margin: 0 22px 22px; }
+.fight-card > a::before { content: none; }
