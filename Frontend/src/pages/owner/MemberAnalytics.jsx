@@ -10,9 +10,11 @@ import { isoDaysAgo } from "../../utils/dates.js";
 const short = (date) => new Date(`${date}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
 const monthName = (month) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-IN", { month: "short", year: "2-digit", timeZone: "UTC" });
 
-function Bars({ rows, labelKey = "label", ariaLabel }) {
+// Brand colours for this page: red bars, the busiest bar (named in the legend and tooltip) in lime.
+function Bars({ rows, labelKey = "label", ariaLabel, busiest = "Busiest" }) {
   if (!rows.length || rows.every((row) => !row.count)) return <EmptyState title="No check-ins in this range" />;
-  return <BarChart data={rows.map((row) => ({ key: row[labelKey], label: row.title ?? row[labelKey], short: row.short ?? row[labelKey], count: row.count }))} value="count" label="Check-ins" ariaLabel={ariaLabel} />;
+  const peak = Math.max(...rows.map((row) => row.count));
+  return <BarChart data={rows.map((row) => ({ key: row[labelKey], label: row.title ?? row[labelKey], short: row.short ?? row[labelKey], count: row.count }))} value="count" label="Check-ins" color="var(--viz-brand)" highlight={(row) => row.count === peak} highlightColor="var(--viz-highlight)" highlightLabel={busiest} ariaLabel={ariaLabel} />;
 }
 
 // Owner: gym-wide attendance and the member table; any member opens the shared analytics page.
@@ -42,12 +44,12 @@ export default function MemberAnalytics({ initialClientId = null, onClose }) {
         <StatCard label="Absent 7+ days" value={totals.absent7} detail={`${totals.absent14} absent 14+ days · ${totals.expiringSoon} renewals due`} tone="danger" />
       </div>
       <div className="dashboard-grid">
-        <Card title="Daily attendance" eyebrow={`${short(data.range.from)} – ${short(data.range.to)}`}><Bars rows={data.daily.map((row) => ({ label: row.date, title: short(row.date), short: short(row.date), count: row.count }))} ariaLabel="Check-ins per day" /></Card>
-        <Card title="Weekly trend" eyebrow="Check-ins per week"><Bars rows={data.weekly.map((row) => ({ label: row.week, title: `Week of ${short(row.week)}`, short: short(row.week), count: row.count }))} ariaLabel="Check-ins per week" /></Card>
-        <Card title="Monthly trend" eyebrow="Check-ins per month"><Bars rows={data.monthly.map((row) => ({ label: row.month, title: monthName(row.month), short: monthName(row.month), count: row.count }))} ariaLabel="Check-ins per month" /></Card>
-        <Card title="Consistency distribution" eyebrow="Active members by attendance rate"><Bars rows={data.consistency.map((row) => ({ label: row.label, count: row.count }))} ariaLabel="Members by attendance rate" /></Card>
-        <Card title="Attendance by coach" eyebrow="Check-ins in range"><Bars rows={data.byTrainer.map((row) => ({ label: row.label, short: row.label.split(" ")[0], count: row.count }))} ariaLabel="Check-ins by coach" /></Card>
-        <Card title="Attendance by program" eyebrow="Check-ins in range"><Bars rows={data.byCourse.map((row) => ({ label: row.label, short: row.label.split(" ")[0], count: row.count }))} ariaLabel="Check-ins by program" /></Card>
+        <Card title="Daily attendance" eyebrow={`${short(data.range.from)} – ${short(data.range.to)}`}><Bars rows={data.daily.map((row) => ({ label: row.date, title: short(row.date), short: short(row.date), count: row.count }))} ariaLabel="Check-ins per day" busiest="Busiest day" /></Card>
+        <Card title="Weekly trend" eyebrow="Check-ins per week"><Bars rows={data.weekly.map((row) => ({ label: row.week, title: `Week of ${short(row.week)}`, short: short(row.week), count: row.count }))} ariaLabel="Check-ins per week" busiest="Busiest week" /></Card>
+        <Card title="Monthly trend" eyebrow="Check-ins per month"><Bars rows={data.monthly.map((row) => ({ label: row.month, title: monthName(row.month), short: monthName(row.month), count: row.count }))} ariaLabel="Check-ins per month" busiest="Busiest month" /></Card>
+        <Card title="Consistency distribution" eyebrow="Active members by attendance rate"><Bars rows={data.consistency.map((row) => ({ label: row.label, count: row.count }))} ariaLabel="Members by attendance rate" busiest="Largest group" /></Card>
+        <Card title="Attendance by coach" eyebrow="Check-ins in range"><Bars rows={data.byTrainer.map((row) => ({ label: row.label, short: row.label.split(" ")[0], count: row.count }))} ariaLabel="Check-ins by coach" busiest="Most check-ins" /></Card>
+        <Card title="Attendance by program" eyebrow="Check-ins in range"><Bars rows={data.byCourse.map((row) => ({ label: row.label, short: row.label.split(" ")[0], count: row.count }))} ariaLabel="Check-ins by program" busiest="Most check-ins" /></Card>
       </div>
     </>}
     <Card title="Members" eyebrow="Attendance & performance">
