@@ -1,0 +1,10 @@
+/* One consistent rupee sign (₹) everywhere. Barlow Condensed and DM Mono have no ₹, and DM Sans's own ₹
+   looks wrong at small sizes, so this family draws only that one character (unicode-range U+20B9) from
+   Noto Sans, bundled locally from @fontsource/noto-sans. It is listed FIRST in each font stack; because
+   of the unicode-range, every other character still comes from the next font. The browser downloads a
+   weight's file only when a ₹ in that weight is on screen. */
+@font-face { font-family: "Rupee Fallback"; font-style: normal; font-weight: 400; font-display: swap; unicode-range: U+20B9; src: url("@fontsource/noto-sans/files/noto-sans-devanagari-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Rupee Fallback"; font-style: normal; font-weight: 500; font-display: swap; unicode-range: U+20B9; src: url("@fontsource/noto-sans/files/noto-sans-devanagari-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Rupee Fallback"; font-style: normal; font-weight: 600; font-display: swap; unicode-range: U+20B9; src: url("@fontsource/noto-sans/files/noto-sans-devanagari-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Rupee Fallback"; font-style: normal; font-weight: 700; font-display: swap; unicode-range: U+20B9; src: url("@fontsource/noto-sans/files/noto-sans-devanagari-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Rupee Fallback"; font-style: normal; font-weight: 800; font-display: swap; unicode-range: U+20B9; src: url("@fontsource/noto-sans/files/noto-sans-devanagari-800-normal.woff2") format("woff2"); }
