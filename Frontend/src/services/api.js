@@ -147,6 +147,11 @@ export const apiCalls = {
     members: () => api.get("/analytics/members"),
     gym: (params) => api.get("/analytics/gym", { params }),
   },
+  gymSettings: {
+    publicContact: () => api.get("/public/gym-contact"),
+    getContact: () => api.get("/gym-settings/contact"),
+    saveContact: (contact) => api.put("/gym-settings/contact", contact),
+  },
   gallery: {
     public: () => api.get("/public/gallery"),
     list: () => api.get("/gallery"),

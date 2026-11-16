@@ -1,7 +1,7 @@
 // Gym details shown on the public About, Contact, Privacy and Terms pages.
-// DEMO DATA: the address, phone, email, founding story and facilities below are samples for a local demo.
-// Replace them with the gym's real details before launch. The phone uses a placeholder and the email
-// a reserved example.com domain so nobody is contacted by mistake.
+// Phone, email, address, WhatsApp and the map link are edited by the owner (Website → Contact details) and
+// stored in the database. The values below are placeholders shown only until the owner saves them.
+// The story, values, facilities and milestones are sample text to replace with the gym's own.
 export const gymProfile = {
   name: "FitConsole",
   tagline: "Train hard. Eat smart. Grow faster.",

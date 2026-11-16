@@ -10,6 +10,7 @@ export const navigation = {
     ["Member Analytics", "◔"],
     ["Reports", "↗"],
     ["Gallery", "▧"],
+    ["Website", "◎"],
     ["Gym agreement", "§"],
     ["Profile", "◉"],
     // Website Leads and Website Analytics are hidden for now; their pages and APIs remain available.

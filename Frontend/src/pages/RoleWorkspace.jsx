@@ -14,7 +14,7 @@ export default function RoleWorkspace(props) {
 function Workspace({ user, section, onNavigate }) {
   const [selectedClient, setSelectedClient] = useState(null);
   if (user.role === "owner") {
-    return section === "Website Leads" || section === "Website Analytics"
+    return section === "Website" || section === "Website Leads" || section === "Website Analytics"
       ? <OwnerWebsiteWorkspace section={section} />
       : <OwnerWorkspace section={section} />;
   }
