@@ -213,7 +213,6 @@ Note that public rate limits are kept in memory per process; run one API instanc
 - Lead enrollment requires a member account already registered with the same phone or email. New-account invitation delivery and automated trial scheduling/confirmation are not implemented.
 - The project has no branch, class-schedule, or gym-contact configuration model. Related public pages must disclose unavailable details instead of presenting invented hours, addresses, schedules, or contact information.
 - Consent copy and privacy/legal text require review and approval for the operating jurisdiction before release. Analytics does not store IP addresses or device fingerprints.
-- `npm start` currently runs the development watcher (`nodemon`). Use a production process command and migration strategy before deployment.
 - The Vite development server binds to `0.0.0.0`; keep it on a trusted development network and do not use it as the production web server.
 - Cashfree checkout is configured for sandbox by default. Production credentials and deployment settings require separate secure configuration and live-mode verification.
 - Configure Cashfree's `PAYMENT_SUCCESS_WEBHOOK` event to send to `https://YOUR_API_HOST/api/payments/cashfree/webhook`. The endpoint accepts only recent signed JSON requests, acknowledges promptly, then re-fetches payment details from Cashfree before recording.

@@ -6,26 +6,36 @@ import { pathToFileURL } from "node:url";
 
 export const ROLES = ["owner", "trainer", "client"];
 
-// Probes a middleware that is a role guard (its code checks `roles.includes`): which roles pass it?
 function roleGuardRoles(fn) {
-  if (!fn.toString().includes("roles.includes")) return null;
-  return ROLES.filter((role) => {
-    let passed = false;
-    fn({ user: { id: "x", role } }, { status() { return this; }, json() { return this; } }, () => { passed = true; });
-    return passed;
-  });
+  if (!Array.isArray(fn.allowedRoles)) return null;
+  return ROLES.filter((role) => fn.allowedRoles.includes(role));
+}
+
+function importInfo(appSource) {
+  return Object.fromEntries(
+    [...appSource.matchAll(/import (\w+)(?:, \{ (\w+) \})? from "\.\/routes\/(\w+)\.js";/g)]
+      .flatMap(([, defaultName, namedName, file]) => [
+        [defaultName, [file, "default"]],
+        ...(namedName ? [[namedName, [file, namedName]]] : []),
+      ]),
+  );
+}
+
+function mountedRouters(appSource) {
+  const csrfMount = appSource.indexOf("app.use(csrfProtection)");
+  return [...appSource.matchAll(/app\.use\("([^"]+)", (\w+)\);/g)].map((match) => ({
+    prefix: match[1],
+    name: match[2],
+    csrfChecked: csrfMount >= 0 && match.index > csrfMount,
+  }));
 }
 
 // Returns [{ method, path, auth, optionalAuth, roles, csrfChecked }] in mount order.
 export async function discoverRoutes(backend) {
   const appSource = await readFile(path.join(backend, "src/app.js"), "utf8");
-  const imports = Object.fromEntries([...appSource.matchAll(/import (\w+)(?:, \{ (\w+) \})? from "\.\/routes\/(\w+)\.js";/g)]
-    .flatMap(([, def, named, file]) => [[def, [file, "default"]], ...(named ? [[named, [file, named]]] : [])]));
-  // Routers mounted before app.use(csrfProtection) never see the CSRF check (e.g. the Cashfree webhook).
-  const csrfAt = appSource.indexOf("app.use(csrfProtection)");
-  const mounts = [...appSource.matchAll(/app\.use\("([^"]+)", (\w+)\);/g)].map((match) => ({ prefix: match[1], name: match[2], csrfChecked: csrfAt >= 0 && match.index > csrfAt }));
+  const imports = importInfo(appSource);
   const routes = [];
-  for (const { prefix, name, csrfChecked } of mounts) {
+  for (const { prefix, name, csrfChecked } of mountedRouters(appSource)) {
     const [file, exportName] = imports[name];
     const router = (await import(pathToFileURL(path.join(backend, "src/routes", `${file}.js`))))[exportName];
     let routerAuth = false; let routerRoles = null;

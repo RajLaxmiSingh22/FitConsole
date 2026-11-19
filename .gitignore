@@ -30,6 +30,7 @@ npm-debug.log*
 .parcel-cache/
 .turbo/
 .idea/
+.vscode/
 tmp/
 temp/
 screenshots/
