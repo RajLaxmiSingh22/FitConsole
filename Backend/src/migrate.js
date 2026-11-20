@@ -1,8 +1,10 @@
 import dotenv from "dotenv";
 
 dotenv.config();
-import { sequelize } from "./database.js";
+import { createMigrationSequelize } from "./database.js";
 import { runMigrations } from "./runMigrations.js";
+
+const sequelize = createMigrationSequelize();
 
 try {
   await sequelize.authenticate();

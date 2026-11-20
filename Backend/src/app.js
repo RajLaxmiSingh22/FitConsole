@@ -2,16 +2,20 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { csrfProtection } from "./middleware/csrfProtection.js";
 import authRoutes from "./routes/authRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import clientRoutes from "./routes/clientRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
+import cronRoutes from "./routes/cronRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import dietEntryRoutes from "./routes/dietEntryRoutes.js";
 import dietPlanRoutes from "./routes/dietPlanRoutes.js";
 import exportRoutes from "./routes/exportRoutes.js";
 import galleryRoutes from "./routes/galleryRoutes.js";
+import gymSettingsRoutes from "./routes/gymSettingsRoutes.js";
 import healthRoutes from "./routes/healthRoutes.js";
 import membershipRoutes from "./routes/membershipRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
@@ -26,6 +30,7 @@ import userRoutes from "./routes/userRoutes.js";
 import waiverRoutes from "./routes/waiverRoutes.js";
 
 export const app = express();
+const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 
 const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 0);
 if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 5) {
@@ -43,7 +48,14 @@ if (allowedOrigins.has("http://localhost:5173")) {
   allowedOrigins.add("http://127.0.0.1:5173");
 }
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      "img-src": ["'self'", "data:", "https://res.cloudinary.com"],
+      "media-src": ["'self'", "https://res.cloudinary.com"],
+    },
+  },
+}));
 app.use(cors({
   origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
   credentials: true,
@@ -54,7 +66,9 @@ app.use("/api/payments", cashfreeWebhookRoutes);
 app.use(express.json({ limit: "32kb" }));
 app.use(cookieParser());
 app.use(csrfProtection);
+app.use(express.static(publicDirectory, { index: false }));
 app.use("/api", healthRoutes);
+app.use("/api/cron", cronRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/profile", profileRoutes);
@@ -63,6 +77,7 @@ app.use("/api/trainers", trainerRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/gallery", galleryRoutes);
+app.use("/api/gym-settings", gymSettingsRoutes);
 app.use("/api/memberships", membershipRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/waivers", waiverRoutes);
@@ -75,6 +90,12 @@ app.use("/api/exports", exportRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/analytics", analyticsRoutes);
+
+app.get(/^(?!\/api(?:\/|$)).*/, (_req, res, next) => {
+  res.sendFile(path.join(publicDirectory, "index.html"), (error) => {
+    if (error) next(error);
+  });
+});
 
 app.use((_req, res) => {
   res.status(404).json({ status: "error", message: "Route not found." });
@@ -92,3 +113,5 @@ app.use((error, _req, res, _next) => {
   console.error("Unhandled request error:", error);
   return res.status(500).json({ status: "error", message: "Internal server error." });
 });
+
+export default app;

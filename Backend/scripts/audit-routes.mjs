@@ -29,6 +29,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // Integrations are switched off so the audit never emails, uploads, charges or calls an AI model.
 const auditEnv = {
   ...process.env, DB_NAME: DB, PORT: String(PORT), NODE_ENV: "development", DEMO_MODE_ENABLED: "true",
+  // Keep the audit on its disposable DB even when the app loads Neon URLs from the root .env.local.
+  DATABASE_URL: "", DATABASE_URL_UNPOOLED: "",
   SMTP_HOST: "", SMTP_USER: "", SMTP_PASS: "", SMTP_PASSWORD: "", SMTP_PORT: "",
   CLOUDINARY_URL: "", CLOUDINARY_CLOUD_NAME: "", CLOUDINARY_API_KEY: "", CLOUDINARY_API_SECRET: "",
   CASHFREE_APP_ID: "", CASHFREE_SECRET_KEY: "", Cashfree_ID: "", Cashfree_Secret_Key: "",

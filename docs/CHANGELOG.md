@@ -10,6 +10,31 @@ Format for each entry:
 - What the owner should do, or "Nothing."
 -->
 
+## 2026-11-20 · Website contact details
+**What changed**
+- You can update the gym's phone, email, address, map link and WhatsApp setting in Website → Contact details; the public Contact page uses the saved information.
+**What you need to do**
+- Review and save the contact details visitors should see.
+
+## 2026-11-20 · Gallery images on the website
+**What changed**
+- Published Cloudinary photos and videos are now allowed by the website's security settings, so browsers can display them.
+**What you need to do**
+- Nothing.
+
+## 2026-11-20 · Vercel hosting setup
+**What changed**
+- The built website and Express API now deploy together as one backend project on Vercel, keeping member sign-in cookies working.
+- Database updates and owner setup run during deployment, and Vercel schedules the daily membership and payment maintenance.
+**What you need to do**
+- Build and package the website before deploying. Add the private Neon, owner, session and schedule settings to Vercel. Use a separate Neon branch for previews.
+
+## 2026-11-20 · Hosted PostgreSQL setup
+**What changed**
+- FitConsole can connect to Neon PostgreSQL using a pooled connection for normal app traffic and a direct connection for database migrations.
+**What you need to do**
+- Add both Neon connection URLs to the backend's private deployment environment. Keep them out of frontend settings and source control.
+
 ## 2026-11-14 · Membership plans and program cards look tidier
 **What changed**
 - The website's membership plans now sit in one row of five on a computer, so the 12-month plan no longer sits alone on a second line. On tablets they show three then two, centred, and on phones you swipe through them.

@@ -9,6 +9,7 @@ const GEMINI_TIMEOUT_MS = 30_000;
 const RETRY_DELAY_MS = 2_000;
 const CALORIE_TOLERANCE = 0.10;
 const FREE_TEXT_LIMIT = 200;
+const BUSY_STATUSES = new Set([429, 500, 503]);
 
 // Gemini structured-output schema (OpenAPI subset).
 export const dietPlanResponseSchema = {
@@ -124,9 +125,6 @@ Progress (oldest first): ${JSON.stringify(progressRows)}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Busy upstream answers: rate limit, overload, or the model is temporarily unavailable.
-const BUSY_STATUSES = new Set([429, 500, 503]);
-
 async function requestModel(model, prompt, apiKey, { fetchImpl, wait }) {
   const request = () => fetchImpl(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -144,7 +142,7 @@ async function requestModel(model, prompt, apiKey, { fetchImpl, wait }) {
   let response;
   try {
     response = await request();
-    if (response.status === 429 || response.status === 503) {
+    if (BUSY_STATUSES.has(response.status)) {
       await wait(RETRY_DELAY_MS);
       response = await request();
     }

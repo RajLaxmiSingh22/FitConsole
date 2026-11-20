@@ -5,7 +5,7 @@ import { assertJwtSecret } from "./auth.js";
 import { app } from "./app.js";
 import { ensureOwnerAccount } from "./config/ownerAccount.js";
 import { ensureTrainerAccounts } from "./config/trainerAccounts.js";
-import { sequelize } from "./database.js";
+import { createMigrationSequelize, sequelize } from "./database.js";
 import { startDailyJob } from "./jobs/daily.js";
 import { runMigrations } from "./runMigrations.js";
 import { getGstRate } from "./utils/gst.js";
@@ -21,8 +21,14 @@ process.on("unhandledRejection", (reason) => {
 try {
   assertJwtSecret();
   getGstRate();
+  const migrationSequelize = createMigrationSequelize();
+  try {
+    await migrationSequelize.authenticate();
+    await runMigrations(migrationSequelize);
+  } finally {
+    if (migrationSequelize !== sequelize) await migrationSequelize.close();
+  }
   await sequelize.authenticate();
-  await runMigrations(sequelize);
   warnIfWaiverMissing(await getCurrentWaiver());
   await ensureOwnerAccount();
   await ensureTrainerAccounts();

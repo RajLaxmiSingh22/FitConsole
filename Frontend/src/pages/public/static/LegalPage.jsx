@@ -1,10 +1,11 @@
 import { gymProfile } from "../../../constants/gymProfile.js";
+import { useGymContact } from "../../../hooks/useGymContact.js";
 
 const updated = "5 November 2026";
 
 // Describes what this application actually stores and shares; keep it in step with the backend.
-const privacy = [
-  ["Who we are", `${gymProfile.name} runs this website and the member app. For any privacy question, email ${gymProfile.email}.`],
+const buildPrivacy = (email) => [
+  ["Who we are", `${gymProfile.name} runs this website and the member app. For any privacy question, email ${email}.`],
   ["What we collect", [
     "Trial requests: name, phone, optional email, preferred program, day and time, and your message.",
     "Member accounts: name, email, password (stored only as a secure hash) and phone number.",
@@ -44,7 +45,8 @@ const terms = [
 ];
 
 export default function LegalPage({ kind }) {
-  const sections = kind === "privacy" ? privacy : terms;
+  const contact = useGymContact();
+  const sections = kind === "privacy" ? buildPrivacy(contact.email) : terms;
   return <div className="static-page legal-page">
     <p className="muted">General template prepared for this demo. Have it reviewed by a legal adviser before launch.</p>
     <nav className="legal-toc" aria-label="On this page">{sections.map(([heading], index) => <a key={heading} href={`#section-${index + 1}`}>{index + 1}. {heading}</a>)}</nav>

@@ -196,7 +196,7 @@ Every new screen needs loading, empty, error and success states, must work at 36
 
 ## 10. Delivery phases
 
-Each phase: migration plus tests, backend tests and frontend build, then a review stop.
+Each phase: migration plus tests, backend tests and frontend build, then a review stop, per the project workflow in `CLAUDE.md`.
 
 | Phase | Scope | Depends on | Size |
 |---|---|---|---|

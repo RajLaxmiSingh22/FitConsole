@@ -115,6 +115,18 @@ test("Gemini does not retry twice and requires an explicit model", async () => {
   await assert.rejects(requestGeminiPlan("prompt", { environment: { GEMINI_API_KEY: "k" } }), GeminiConfigError);
 });
 
+test("Gemini retries a 500 overload response once", async () => {
+  const waits = [];
+  const responses = [geminiResponse({}, 500), geminiResponse(planWithCalories(2000))];
+  const plan = await requestGeminiPlan("prompt", {
+    environment,
+    wait: async (ms) => waits.push(ms),
+    fetchImpl: async () => responses.shift(),
+  });
+  assert.equal(plan.title, "Test plan");
+  assert.deepEqual(waits, [2000]);
+});
+
 test("missing profile fields are reported in plain words with their keys", async () => {
   const { computeDietTargets, IncompleteProfileError } = await import("../src/services/dietTargets.js");
   try {

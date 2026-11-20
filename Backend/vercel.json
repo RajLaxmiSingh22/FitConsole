@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "express",
+  "buildCommand": "npm run migrate && npm run provision",
+  "functions": {
+    "src/app.js": {
+      "maxDuration": 300
+    }
+  },
+  "schedules": {
+    "daily-maintenance": {
+      "schedule": "35 18 * * *",
+      "timezone": "UTC",
+      "path": "/api/cron/daily",
+      "requestMethod": "GET"
+    }
+  }
+}

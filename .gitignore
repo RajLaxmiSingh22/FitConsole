@@ -30,6 +30,7 @@ npm-debug.log*
 .parcel-cache/
 .turbo/
 .idea/
+.vscode/
 tmp/
 temp/
 screenshots/
@@ -104,3 +105,5 @@ archive/
 # README screenshots (generated from demo data only).
 !docs/screenshots/
 !docs/screenshots/*.png
+.neon
+.vercel/
