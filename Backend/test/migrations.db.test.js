@@ -6,11 +6,11 @@ import { databaseTest, hasTestDatabase } from "./helpers/database.js";
 const { sequelize } = hasTestDatabase ? await import("../src/database.js") : {};
 after(async () => { await sequelize?.close(); });
 
-databaseTest("the baseline builds the full schema on an empty database, and a second run does nothing", async () => {
+databaseTest("the migrations build the full schema on an empty database, and a second run does nothing", async () => {
   const { BASELINE_MIGRATION, runMigrations } = await import("../src/runMigrations.js");
   await runMigrations(sequelize);
   const [[{ count }]] = await sequelize.query("select count(*)::int as count from information_schema.tables where table_schema = 'public' and table_name <> 'fitconsole_migrations'");
-  assert.equal(count, 38);
+  assert.equal(count, 39);
   const [first] = await sequelize.query("select name, applied_at from fitconsole_migrations order by name");
   assert.ok(first.some((row) => row.name === BASELINE_MIGRATION));
   await runMigrations(sequelize);
