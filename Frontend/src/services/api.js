@@ -8,9 +8,8 @@ const SAFE_METHODS = new Set(["get", "head", "options"]);
 let csrfToken = "";
 let refreshInFlight = null;
 
-const apiBaseUrl = (
-  import.meta.env.VITE_API_URL || "http://localhost:9000/api"
-).replace(/\/+$/, "");
+const defaultApiBaseUrl = import.meta.env.PROD ? "/api" : "http://localhost:9000/api";
+const apiBaseUrl = (import.meta.env.VITE_API_URL || defaultApiBaseUrl).replace(/\/+$/, "");
 
 // Profile photo URL; `version` changes whenever the photo does, so browsers refetch it.
 export function avatarUrl(userId, version) {

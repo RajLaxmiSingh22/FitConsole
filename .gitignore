@@ -105,3 +105,5 @@ archive/
 # README screenshots (generated from demo data only).
 !docs/screenshots/
 !docs/screenshots/*.png
+.neon
+.vercel/

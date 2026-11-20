@@ -20,6 +20,15 @@ test("unknown routes return the JSON error envelope", async () => {
   });
 });
 
+test("content security policy allows Cloudinary images and videos", async () => {
+  await withServer(async (base) => {
+    const response = await fetch(`${base}/api/does-not-exist`);
+    const policy = response.headers.get("content-security-policy");
+    assert.match(policy, /img-src 'self' data: https:\/\/res\.cloudinary\.com(?:;|$)/);
+    assert.match(policy, /media-src 'self' https:\/\/res\.cloudinary\.com(?:;|$)/);
+  });
+});
+
 test("malformed JSON bodies return 400 without a stack trace", async () => {
   await withServer(async (base) => {
     const response = await fetch(`${base}/api/auth/login`, {

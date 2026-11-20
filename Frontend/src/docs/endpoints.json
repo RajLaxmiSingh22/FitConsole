@@ -1,6 +1,7 @@
 [
   {"method":"POST","path":"/api/payments/cashfree/webhook","access":"Public","csrf":"no","demoReadOnly":false,"description":"Payment updates from Cashfree (signed by Cashfree)"},
   {"method":"GET","path":"/api/health","access":"Public","csrf":"no","demoReadOnly":false,"description":"API and database status (returns { status: \"ok\", service, database }, not the usual envelope)"},
+  {"method":"GET","path":"/api/cron/daily","access":"Public","csrf":"no","demoReadOnly":false,"description":"Run scheduled membership and payment maintenance (Vercel only)"},
   {"method":"POST","path":"/api/auth/register","access":"Public","csrf":"no","demoReadOnly":false,"description":"Create a member account"},
   {"method":"POST","path":"/api/auth/login","access":"Public","csrf":"no","demoReadOnly":false,"description":"Sign in; sets the session cookie and returns the CSRF token"},
   {"method":"POST","path":"/api/auth/forgot-password","access":"Public","csrf":"no","demoReadOnly":false,"description":"Email a password-reset link"},

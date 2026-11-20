@@ -24,6 +24,7 @@ for (const [key, value] of Object.entries(placeholders)) {
 // A real test database for the tests that need one (see test/helpers/database.js).
 if (process.env.TEST_DATABASE_URL) {
   const url = new URL(process.env.TEST_DATABASE_URL);
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
   process.env.DB_HOST = url.hostname;
   process.env.DB_PORT = url.port || "5432";
   process.env.DB_USER = decodeURIComponent(url.username);

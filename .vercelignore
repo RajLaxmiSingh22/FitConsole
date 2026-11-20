@@ -1,0 +1,6 @@
+**/.env
+**/.env.*
+**/.neon
+**/.vercel/**
+*.zip
+design/references/

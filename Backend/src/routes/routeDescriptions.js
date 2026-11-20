@@ -7,6 +7,7 @@ export const routeDescriptions = {
   "PUT /api/gym-settings/contact": "Save the gym contact details shown on the website (owner)",
   "POST /api/payments/cashfree/webhook": "Payment updates from Cashfree (signed by Cashfree)",
   "GET /api/health": "API and database status (returns { status: \"ok\", service, database }, not the usual envelope)",
+  "GET /api/cron/daily": "Run scheduled membership and payment maintenance (Vercel only)",
   "POST /api/auth/register": "Create a member account",
   "POST /api/auth/login": "Sign in; sets the session cookie and returns the CSRF token",
   "POST /api/auth/forgot-password": "Email a password-reset link",
