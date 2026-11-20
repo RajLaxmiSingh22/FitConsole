@@ -7,8 +7,15 @@ import { pathToFileURL } from "node:url";
 export const ROLES = ["owner", "trainer", "client"];
 
 function roleGuardRoles(fn) {
-  if (!Array.isArray(fn.allowedRoles)) return null;
-  return ROLES.filter((role) => fn.allowedRoles.includes(role));
+  if (Array.isArray(fn.allowedRoles)) {
+    return ROLES.filter((role) => fn.allowedRoles.includes(role));
+  }
+  if (!fn.toString().includes("roles.includes")) return null;
+  return ROLES.filter((role) => {
+    let passed = false;
+    fn({ user: { id: "x", role } }, { status() { return this; }, json() { return this; } }, () => { passed = true; });
+    return passed;
+  });
 }
 
 function importInfo(appSource) {

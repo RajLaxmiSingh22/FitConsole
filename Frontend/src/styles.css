@@ -1788,6 +1788,5 @@ button, input, select, textarea { font-family: inherit; }
 .plan-warnings { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
 .plan-warnings li { padding: 8px 10px; border-left: 3px solid var(--yellow); background: #f1bc500f; color: #f0ca77; font-size: 12px; line-height: 1.5; }
 .form-span { grid-column: 1 / -1; }
-
 .footer-contact { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 0; font-size: 12px; }
 .footer-contact a { color: #c9c6c0; }
