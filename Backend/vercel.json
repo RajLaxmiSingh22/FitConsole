@@ -7,6 +7,12 @@
       "maxDuration": 300
     }
   },
+  "rewrites": [
+    {
+      "source": "/((?!api(?:/|$)|assets/).*)",
+      "destination": "/index.html"
+    }
+  ],
   "schedules": {
     "daily-maintenance": {
       "schedule": "35 18 * * *",
